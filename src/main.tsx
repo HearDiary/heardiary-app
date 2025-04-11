@@ -1,4 +1,4 @@
-// main.tsx
+/// main.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import logo from './assets/logo_icon_256.png';
