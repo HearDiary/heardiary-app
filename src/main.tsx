@@ -1,3 +1,5 @@
+// src/main.tsx
+
 import React, { useState, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 
@@ -14,18 +16,18 @@ const App = () => {
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
-      mediaRecorder.ondataavailable = event => {
+      mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
         }
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
         const audioUrl = URL.createObjectURL(audioBlob);
-        setRecordings(prev => [
+        setRecordings((prev) => [
           ...prev,
-          { name: recordingName || 'Untitled', url: audioUrl }
+          { name: recordingName || 'Untitled', url: audioUrl },
         ]);
         setRecordingName('');
       };
@@ -49,25 +51,21 @@ const App = () => {
         type="text"
         placeholder="Enter recording name..."
         value={recordingName}
-        onChange={e => setRecordingName(e.target.value)}
-        style={{ marginRight: '0.5rem' }}
+        onChange={(e) => setRecordingName(e.target.value)}
       />
-      <button onClick={startRecording}>Start Recording</button>
-      <button onClick={stopRecording} style={{ marginLeft: '0.5rem' }}>
+      <br />
+      <button onClick={startRecording} style={{ marginTop: '10px', marginRight: '10px' }}>
+        Start Recording
+      </button>
+      <button onClick={stopRecording} style={{ marginTop: '10px' }}>
         Stop Recording
       </button>
 
-      <h2 style={{ marginTop: '2rem' }}>Recordings</h2>
+      <h2>Recordings</h2>
       <ul>
         {recordings.map((rec, index) => (
-          <li key={index} style={{ marginBottom: '1rem' }}>
-            <strong>{rec.name}</strong>
-            <br />
-            <audio controls src={rec.url} />
-            <br />
-            <a href={rec.url} download={`${rec.name}.webm`}>
-              ⬇ Download
-            </a>
+          <li key={index}>
+            <strong>{rec.name}</strong> – <audio controls src={rec.url}></audio>
           </li>
         ))}
       </ul>
