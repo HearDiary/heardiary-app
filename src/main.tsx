@@ -11,14 +11,16 @@ const App = () => {
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
 
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  const preferredMimeType = isSafari ? 'audio/mp4' : 'audio/webm;codecs=opus';
+
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
-      });
 
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: preferredMimeType });
+      mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
       setIsRecording(true);
       setError('');
@@ -30,7 +32,7 @@ const App = () => {
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: preferredMimeType });
         const audioUrl = URL.createObjectURL(audioBlob);
         setRecordings((prev) => [
           ...prev,
@@ -41,7 +43,6 @@ const App = () => {
         streamRef.current?.getTracks().forEach(track => track.stop());
       };
 
-      mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start();
     } catch (err) {
       setError('Microphone access denied or not supported.');
@@ -90,7 +91,7 @@ const App = () => {
           <li key={i} style={{ marginBottom: '1rem' }}>
             <strong>{rec.name}</strong><br />
             <audio controls src={rec.url} style={{ display: 'block', marginTop: '0.5rem' }} />
-            <a href={rec.url} download={`${rec.name}.webm`} style={{ fontSize: '0.9rem' }}>Download</a>
+            <a href={rec.url} download={`${rec.name}.${isSafari ? 'mp4' : 'webm'}`} style={{ fontSize: '0.9rem' }}>Download</a>
           </li>
         ))}
       </ul>
