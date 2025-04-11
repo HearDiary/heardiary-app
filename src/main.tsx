@@ -5,10 +5,11 @@ import logo from './assets/logo_icon_256.png';
 const App = () => {
   const [recordings, setRecordings] = useState<{ name: string; url: string }[]>([]);
   const [recordingName, setRecordingName] = useState('');
-  const [recordingTime, setRecordingTime] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startRecording = async () => {
     try {
@@ -16,6 +17,12 @@ const App = () => {
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
+      setIsRecording(true);
+      setElapsedTime(0);
+
+      intervalRef.current = setInterval(() => {
+        setElapsedTime((prev) => prev + 1);
+      }, 1000);
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -26,24 +33,24 @@ const App = () => {
       mediaRecorder.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
         const audioUrl = URL.createObjectURL(audioBlob);
-        setRecordings((prev) => [...prev, { name: recordingName || 'Untitled', url: audioUrl }]);
+        setRecordings((prev) => [
+          ...prev,
+          { name: recordingName || 'Untitled', url: audioUrl },
+        ]);
         setRecordingName('');
-        clearInterval(intervalRef.current!);
-        setRecordingTime(0);
+        setIsRecording(false);
+        if (intervalRef.current) clearInterval(intervalRef.current);
       };
 
       mediaRecorder.start();
-      intervalRef.current = setInterval(() => {
-        setRecordingTime((t) => t + 1);
-      }, 1000);
     } catch (error) {
       console.error('Error accessing microphone:', error);
-      alert('Please allow microphone access.');
+      alert('Please allow microphone access to record audio.');
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+    if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
     }
   };
@@ -53,58 +60,58 @@ const App = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 flex flex-col items-center p-6">
-      <img src={logo} alt="HearDiary Logo" className="w-16 h-16 mb-4" />
-      <h1 className="text-3xl font-bold mb-4">HearDiary</h1>
-      <div className="flex flex-col items-center mb-6">
-        <input
-          type="text"
-          placeholder="Enter recording name..."
-          className="border rounded p-2 mb-2 text-center"
-          value={recordingName}
-          onChange={(e) => setRecordingName(e.target.value)}
-        />
-        <div className="flex gap-4">
+    <div className="min-h-screen bg-gray-50 text-gray-900 p-4 font-sans">
+      <div className="max-w-xl mx-auto">
+        <div className="flex items-center mb-4">
+          <img src={logo} alt="HearDiary Logo" className="h-10 w-10 mr-2" />
+          <h1 className="text-3xl font-bold">HearDiary</h1>
+        </div>
+        <div className="flex items-center gap-2 mb-2">
+          <input
+            type="text"
+            placeholder="Enter recording name..."
+            value={recordingName}
+            onChange={(e) => setRecordingName(e.target.value)}
+            className="flex-1 p-2 rounded border border-gray-300"
+          />
           <button
-            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
             onClick={startRecording}
+            disabled={isRecording}
+            className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50"
           >
             Start Recording
           </button>
           <button
-            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
             onClick={stopRecording}
+            disabled={!isRecording}
+            className="bg-red-600 text-white px-4 py-2 rounded disabled:opacity-50"
           >
             Stop Recording
           </button>
         </div>
-        {recordingTime > 0 && (
-          <div className="mt-2 text-sm text-gray-600">Recording time: {recordingTime}s</div>
+        {isRecording && (
+          <div className="mb-2 text-sm text-gray-600">Recording... {elapsedTime}s</div>
         )}
+        <h2 className="text-xl font-semibold mt-4 mb-2">Recordings</h2>
+        <ul className="space-y-2">
+          {recordings.map((rec, index) => (
+            <li key={index} className="bg-white p-3 rounded shadow flex items-center justify-between">
+              <div>
+                <strong>{rec.name}</strong>
+                <audio controls src={rec.url} className="block mt-1" />
+              </div>
+              <button
+                onClick={() => deleteRecording(index)}
+                className="text-sm text-red-500 hover:underline"
+              >
+                Delete
+              </button>
+            </li>
+          ))}
+        </ul>
       </div>
-
-      <h2 className="text-xl font-semibold mb-2">Recordings</h2>
-      <ul className="w-full max-w-md space-y-3">
-        {recordings.map((rec, index) => (
-          <li key={index} className="bg-gray-100 rounded-xl p-4 flex items-center justify-between">
-            <div className="flex-1">
-              <strong>{rec.name}</strong>
-              <audio controls className="w-full mt-1">
-                <source src={rec.url} type="audio/wav" />
-              </audio>
-            </div>
-            <button
-              className="text-red-600 ml-4 hover:text-red-800"
-              onClick={() => deleteRecording(index)}
-            >
-              ✖
-            </button>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 };
 
-const root = ReactDOM.createRoot(document.getElementById('root')!);
-root.render(<App />);
+ReactDOM.createRoot(document.getElementById('root')!).render(<App />);
