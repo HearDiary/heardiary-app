@@ -8,7 +8,6 @@ const App = () => {
   const [recordingName, setRecordingName] = useState('');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const [isRecording, setIsRecording] = useState(false);
 
   const startRecording = async () => {
     try {
@@ -17,7 +16,7 @@ const App = () => {
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
-      mediaRecorder.ondataavailable = event => {
+      mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
         }
@@ -26,13 +25,14 @@ const App = () => {
       mediaRecorder.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
         const audioUrl = URL.createObjectURL(audioBlob);
-        setRecordings(prev => [...prev, { name: recordingName || 'Untitled', url: audioUrl }]);
+        setRecordings((prev) => [
+          ...prev,
+          { name: recordingName || 'Untitled', url: audioUrl },
+        ]);
         setRecordingName('');
-        setIsRecording(false);
       };
 
       mediaRecorder.start();
-      setIsRecording(true);
     } catch (error) {
       console.error('Error accessing microphone:', error);
       alert('Please allow microphone access to record audio.');
@@ -46,36 +46,24 @@ const App = () => {
   };
 
   return (
-    <div style={{ padding: '2rem', fontFamily: 'Arial' }}>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem' }}>
-        <img src={logo} alt="HearDiary Logo" style={{ width: '48px', height: '48px', marginRight: '1rem' }} />
-        <h1>HearDiary</h1>
+    <div style={{ fontFamily: 'Arial', padding: '1rem', maxWidth: '600px', margin: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+        <img src={logo} alt="HearDiary Logo" style={{ width: '40px', height: '40px' }} />
+        <h1 style={{ margin: 0 }}>HearDiary</h1>
       </div>
 
       <input
         type="text"
         placeholder="Enter recording name..."
         value={recordingName}
-        onChange={e => setRecordingName(e.target.value)}
-        style={{ padding: '0.5rem', fontSize: '1rem', marginRight: '1rem', borderRadius: '0.5rem' }}
+        onChange={(e) => setRecordingName(e.target.value)}
+        style={{ padding: '0.5rem', marginRight: '0.5rem' }}
       />
-      <button
-        onClick={startRecording}
-        disabled={isRecording}
-        style={{ padding: '0.5rem 1rem', backgroundColor: '#4CAF50', color: '#fff', border: 'none', borderRadius: '0.5rem', marginRight: '0.5rem' }}
-      >
-        Start Recording
-      </button>
-      <button
-        onClick={stopRecording}
-        disabled={!isRecording}
-        style={{ padding: '0.5rem 1rem', backgroundColor: '#f44336', color: '#fff', border: 'none', borderRadius: '0.5rem' }}
-      >
-        Stop Recording
-      </button>
+      <button onClick={startRecording} style={{ padding: '0.5rem', marginRight: '0.5rem' }}>Start Recording</button>
+      <button onClick={stopRecording} style={{ padding: '0.5rem' }}>Stop Recording</button>
 
       <h2 style={{ marginTop: '2rem' }}>Recordings</h2>
-      <ul style={{ listStyle: 'none', padding: 0 }}>
+      <ul style={{ listStyle: 'none', paddingLeft: 0 }}>
         {recordings.map((rec, index) => (
           <li key={index} style={{ marginBottom: '1rem' }}>
             <strong>{rec.name}</strong>
