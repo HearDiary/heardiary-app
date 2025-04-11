@@ -1,55 +1,49 @@
-import React, { useState, useRef } from 'react';
+// main.tsx
+import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 
 const App = () => {
   const [recordings, setRecordings] = useState<{ name: string; url: string }[]>([]);
   const [recordingName, setRecordingName] = useState('');
   const [isRecording, setIsRecording] = useState(false);
-
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/wav', // <== toto je dôležité
-      });
-
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
-      mediaRecorder.ondataavailable = (event) => {
+      mediaRecorder.ondataavailable = event => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
         }
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const audioUrl = URL.createObjectURL(audioBlob);
-        setRecordings((prev) => [
+        setRecordings(prev => [
           ...prev,
-          {
-            name: recordingName || `Untitled`,
-            url: audioUrl,
-          },
+          { name: recordingName || 'Untitled', url: audioUrl }
         ]);
         setRecordingName('');
-        setIsRecording(false);
       };
 
-      mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start();
       setIsRecording(true);
-    } catch (err) {
-      console.error('Microphone access error:', err);
-      alert('Please allow microphone access to record audio.');
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
+      alert('Microphone access denied or not available.');
     }
   };
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
+      setIsRecording(false);
     }
   };
 
@@ -57,25 +51,23 @@ const App = () => {
     <div style={{ padding: '1rem', fontFamily: 'Arial' }}>
       <h1>HearDiary MVP</h1>
       <input
-        type="text"
         placeholder="Enter recording name..."
         value={recordingName}
         onChange={(e) => setRecordingName(e.target.value)}
+        style={{ marginRight: '1rem', padding: '0.25rem' }}
       />
-      <div style={{ margin: '0.5rem 0' }}>
-        <button onClick={startRecording} disabled={isRecording}>
-          Start Recording
-        </button>
-        <button onClick={stopRecording} disabled={!isRecording} style={{ marginLeft: '0.5rem' }}>
-          Stop Recording
-        </button>
-      </div>
+      <button onClick={startRecording} disabled={isRecording} style={{ marginRight: '0.5rem' }}>
+        Start Recording
+      </button>
+      <button onClick={stopRecording} disabled={!isRecording}>
+        Stop Recording
+      </button>
 
-      <h2>Recordings</h2>
+      <h2 style={{ marginTop: '2rem' }}>Recordings</h2>
       <ul>
         {recordings.map((rec, index) => (
           <li key={index}>
-            {rec.name} – <audio controls src={rec.url}></audio>
+            <strong>{rec.name}</strong> – <audio controls src={rec.url} />
           </li>
         ))}
       </ul>
