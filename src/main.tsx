@@ -1,18 +1,17 @@
 // main.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 
 const App = () => {
   const [recordings, setRecordings] = useState<{ name: string; url: string }[]>([]);
   const [recordingName, setRecordingName] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -25,25 +24,23 @@ const App = () => {
       mediaRecorder.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const audioUrl = URL.createObjectURL(audioBlob);
-        setRecordings(prev => [
-          ...prev,
-          { name: recordingName || 'Untitled', url: audioUrl }
-        ]);
+        setRecordings(prev => [...prev, { name: recordingName || 'Untitled', url: audioUrl }]);
         setRecordingName('');
+
+        // Uvoľnenie mikrofónu
+        stream.getTracks().forEach(track => track.stop());
       };
 
       mediaRecorder.start();
-      setIsRecording(true);
     } catch (error) {
       console.error('Error accessing microphone:', error);
-      alert('Microphone access denied or not available.');
+      alert('Please allow microphone access to record audio.');
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
+    if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
-      setIsRecording(false);
     }
   };
 
@@ -51,15 +48,15 @@ const App = () => {
     <div style={{ padding: '1rem', fontFamily: 'Arial' }}>
       <h1>HearDiary MVP</h1>
       <input
+        type="text"
         placeholder="Enter recording name..."
         value={recordingName}
-        onChange={(e) => setRecordingName(e.target.value)}
-        style={{ marginRight: '1rem', padding: '0.25rem' }}
+        onChange={e => setRecordingName(e.target.value)}
       />
-      <button onClick={startRecording} disabled={isRecording} style={{ marginRight: '0.5rem' }}>
+      <button onClick={startRecording} style={{ marginLeft: '0.5rem' }}>
         Start Recording
       </button>
-      <button onClick={stopRecording} disabled={!isRecording}>
+      <button onClick={stopRecording} style={{ marginLeft: '0.5rem' }}>
         Stop Recording
       </button>
 
@@ -67,7 +64,8 @@ const App = () => {
       <ul>
         {recordings.map((rec, index) => (
           <li key={index}>
-            <strong>{rec.name}</strong> – <audio controls src={rec.url} />
+            <strong>{rec.name}</strong> –{' '}
+            <audio controls src={rec.url} preload="auto" />
           </li>
         ))}
       </ul>
