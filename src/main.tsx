@@ -1,6 +1,7 @@
 // main.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
+import logo from './assets/logo.svg'; // Pridaj svoj správny názov loga z balíka
 
 const App = () => {
   const [recordings, setRecordings] = useState<{ name: string; url: string }[]>([]);
@@ -76,8 +77,11 @@ const App = () => {
   };
 
   return (
-    <div style={{ padding: '1.5rem', fontFamily: 'Arial, sans-serif', backgroundColor: '#f9f9f9', minHeight: '100vh' }}>
-      <h1 style={{ color: '#333' }}>HearDiary MVP</h1>
+    <div style={{ padding: '1.5rem', fontFamily: 'Arial, sans-serif', background: 'linear-gradient(to right, #f0f4f8, #d9e2ec)', minHeight: '100vh' }}>
+      <header style={{ display: 'flex', alignItems: 'center', marginBottom: '2rem' }}>
+        <img src={logo} alt="HearDiary Logo" style={{ height: '48px', marginRight: '1rem' }} />
+        <h1 style={{ color: '#333', fontSize: '2rem' }}>HearDiary</h1>
+      </header>
 
       <div style={{ backgroundColor: 'white', padding: '1rem', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', maxWidth: '400px', marginBottom: '2rem' }}>
         <input
@@ -126,4 +130,3 @@ const App = () => {
 };
 
 ReactDOM.createRoot(document.getElementById('root')!).render(<App />);
-
