@@ -4,11 +4,22 @@ import ReactDOM from 'react-dom/client';
 import logo from './assets/logo_icon_256.png';
 
 const App = () => {
-  const [recordings, setRecordings] = useState<{ name: string; url: string }[]>([]);
+  const [recordings, setRecordings] = useState<{ name: string; url: string; time: string }[]>([]);
   const [recordingName, setRecordingName] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const [isRecording, setIsRecording] = useState(false);
+  const startTimeRef = useRef<number>(0);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+      .toString()
+      .padStart(2, '0');
+    const secs = Math.floor(seconds % 60)
+      .toString()
+      .padStart(2, '0');
+    return `${mins}:${secs}`;
+  };
 
   const startRecording = async () => {
     try {
@@ -16,18 +27,24 @@ const App = () => {
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
+      startTimeRef.current = Date.now();
       setIsRecording(true);
 
-      mediaRecorder.ondataavailable = (event) => {
+      mediaRecorder.ondataavailable = event => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
         }
       };
 
       mediaRecorder.onstop = () => {
+        const endTime = Date.now();
+        const duration = formatTime((endTime - startTimeRef.current) / 1000);
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
         const audioUrl = URL.createObjectURL(audioBlob);
-        setRecordings((prev) => [...prev, { name: recordingName || 'Untitled', url: audioUrl }]);
+        setRecordings(prev => [
+          ...prev,
+          { name: recordingName || 'Untitled', url: audioUrl, time: duration }
+        ]);
         setRecordingName('');
         setIsRecording(false);
       };
@@ -35,7 +52,6 @@ const App = () => {
       mediaRecorder.start();
     } catch (error) {
       console.error('Error accessing microphone:', error);
-      alert('Please allow microphone access to record audio.');
     }
   };
 
@@ -46,75 +62,58 @@ const App = () => {
   };
 
   const deleteRecording = (index: number) => {
-    const newRecordings = [...recordings];
-    newRecordings.splice(index, 1);
-    setRecordings(newRecordings);
+    setRecordings(prev => prev.filter((_, i) => i !== index));
   };
 
   return (
-    <div style={{ fontFamily: 'Arial, sans-serif', padding: '1rem', maxWidth: '600px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-        <img src={logo} alt="Logo" width={40} height={40} />
-        <h1 style={{ fontSize: '1.8rem', margin: 0 }}>HearDiary</h1>
-      </div>
-      <div style={{ marginBottom: '1rem' }}>
-        <input
-          type="text"
-          placeholder="Enter recording name..."
-          value={recordingName}
-          onChange={(e) => setRecordingName(e.target.value)}
-          style={{ padding: '0.5rem', width: 'calc(100% - 110px)', marginRight: '0.5rem', borderRadius: '8px', border: '1px solid #ccc' }}
-        />
+    <div style={{ fontFamily: 'Arial', textAlign: 'center', background: 'linear-gradient(to bottom, #f0f4f8, #d9e2ec)', minHeight: '100vh', padding: '2rem' }}>
+      <img src={logo} alt="Logo" style={{ width: 64, marginBottom: '1rem' }} />
+      <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>HearDiary</h1>
+      <input
+        placeholder="Enter recording name..."
+        value={recordingName}
+        onChange={e => setRecordingName(e.target.value)}
+        style={{ padding: '0.5rem', borderRadius: '10px', border: '1px solid #ccc', marginBottom: '1rem', width: '80%', maxWidth: '300px' }}
+      />
+      <div style={{ margin: '1rem' }}>
         <button
           onClick={startRecording}
           disabled={isRecording}
           style={{
-            backgroundColor: isRecording ? '#ccc' : '#4CAF50',
+            backgroundColor: '#4caf50',
             color: 'white',
             border: 'none',
-            borderRadius: '8px',
-            padding: '0.5rem 1rem',
-            marginRight: '0.5rem',
-            cursor: isRecording ? 'not-allowed' : 'pointer'
-          }}
-        >
+            padding: '0.6rem 1rem',
+            borderRadius: '12px',
+            marginRight: '1rem',
+            cursor: 'pointer'
+          }}>
           Start Recording
         </button>
         <button
           onClick={stopRecording}
           disabled={!isRecording}
           style={{
-            backgroundColor: !isRecording ? '#ccc' : '#f44336',
+            backgroundColor: '#f44336',
             color: 'white',
             border: 'none',
-            borderRadius: '8px',
-            padding: '0.5rem 1rem',
-            cursor: !isRecording ? 'not-allowed' : 'pointer'
-          }}
-        >
+            padding: '0.6rem 1rem',
+            borderRadius: '12px',
+            cursor: 'pointer'
+          }}>
           Stop Recording
         </button>
       </div>
-      <h2>Recordings</h2>
-      <ul style={{ padding: 0, listStyle: 'none' }}>
+      <h2 style={{ marginTop: '2rem' }}>Recordings</h2>
+      <ul style={{ listStyle: 'none', padding: 0 }}>
         {recordings.map((rec, index) => (
-          <li key={index} style={{ marginBottom: '1rem', display: 'flex', flexDirection: 'column' }}>
-            <strong>{rec.name}</strong>
-            <audio controls src={rec.url} style={{ marginTop: '0.25rem', borderRadius: '8px', width: '100%' }} />
+          <li key={index} style={{ marginBottom: '1rem' }}>
+            <strong>{rec.name}</strong> ({rec.time})<br />
+            <audio controls src={rec.url} style={{ borderRadius: '10px', marginTop: '0.5rem' }} />
+            <br />
             <button
               onClick={() => deleteRecording(index)}
-              style={{
-                backgroundColor: '#888',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                padding: '0.25rem 0.5rem',
-                marginTop: '0.5rem',
-                width: 'fit-content',
-                cursor: 'pointer',
-                fontSize: '0.9rem'
-              }}
-            >
+              style={{ marginTop: '0.5rem', backgroundColor: '#999', color: '#fff', border: 'none', borderRadius: '8px', padding: '0.4rem 0.8rem', cursor: 'pointer' }}>
               Delete
             </button>
           </li>
@@ -124,5 +123,4 @@ const App = () => {
   );
 };
 
-const root = ReactDOM.createRoot(document.getElementById('root')!);
-root.render(<App />);
+ReactDOM.createRoot(document.getElementById('root')!).render(<App />);
