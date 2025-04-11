@@ -1,5 +1,5 @@
 // main.tsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 
 const App = () => {
@@ -7,9 +7,11 @@ const App = () => {
   const [recordingName, setRecordingName] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState('');
+  const [recordingTime, setRecordingTime] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const intervalRef = useRef<number | null>(null);
 
   const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
   const preferredMimeType = isSafari ? 'audio/mp4' : 'audio/webm;codecs=opus';
@@ -24,6 +26,11 @@ const App = () => {
       audioChunksRef.current = [];
       setIsRecording(true);
       setError('');
+      setRecordingTime(0);
+
+      intervalRef.current = window.setInterval(() => {
+        setRecordingTime((prev) => prev + 1);
+      }, 1000);
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -40,6 +47,8 @@ const App = () => {
         ]);
         setRecordingName('');
         setIsRecording(false);
+        setRecordingTime(0);
+        if (intervalRef.current) clearInterval(intervalRef.current);
         streamRef.current?.getTracks().forEach(track => track.stop());
       };
 
@@ -56,45 +65,62 @@ const App = () => {
     }
   };
 
+  const deleteRecording = (index: number) => {
+    setRecordings((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const secs = (seconds % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
+  };
+
   return (
-    <div style={{ padding: '1rem', fontFamily: 'Arial, sans-serif' }}>
-      <h1>HearDiary MVP</h1>
-      <input
-        placeholder="Enter recording name..."
-        value={recordingName}
-        onChange={(e) => setRecordingName(e.target.value)}
-        disabled={isRecording}
-        style={{ padding: '0.5rem', marginBottom: '0.5rem', display: 'block', width: '100%', maxWidth: '300px' }}
-      />
-      <div style={{ marginBottom: '1rem' }}>
-        <button
-          onClick={startRecording}
+    <div style={{ padding: '1.5rem', fontFamily: 'Arial, sans-serif', backgroundColor: '#f9f9f9', minHeight: '100vh' }}>
+      <h1 style={{ color: '#333' }}>HearDiary MVP</h1>
+
+      <div style={{ backgroundColor: 'white', padding: '1rem', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', maxWidth: '400px', marginBottom: '2rem' }}>
+        <input
+          placeholder="Enter recording name..."
+          value={recordingName}
+          onChange={(e) => setRecordingName(e.target.value)}
           disabled={isRecording}
-          style={{ backgroundColor: isRecording ? '#ccc' : 'green', color: 'white', padding: '0.5rem 1rem', marginRight: '1rem' }}
-        >
-          {isRecording ? 'Recording...' : 'Start Recording'}
-        </button>
-        <button
-          onClick={stopRecording}
-          disabled={!isRecording}
-          style={{ backgroundColor: !isRecording ? '#ccc' : 'red', color: 'white', padding: '0.5rem 1rem' }}
-        >
-          Stop Recording
-        </button>
+          style={{ padding: '0.5rem', width: '100%', marginBottom: '1rem', borderRadius: '8px', border: '1px solid #ccc' }}
+        />
+
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <button
+            onClick={startRecording}
+            disabled={isRecording}
+            style={{ backgroundColor: '#4CAF50', color: 'white', padding: '0.5rem 1rem', border: 'none', borderRadius: '8px' }}
+          >
+            {isRecording ? 'Recording...' : 'Start'}
+          </button>
+          <button
+            onClick={stopRecording}
+            disabled={!isRecording}
+            style={{ backgroundColor: '#f44336', color: 'white', padding: '0.5rem 1rem', border: 'none', borderRadius: '8px' }}
+          >
+            Stop
+          </button>
+          {isRecording && <span style={{ color: '#e53935', fontWeight: 'bold' }}>{formatTime(recordingTime)}</span>}
+        </div>
+        {error && <p style={{ color: 'red', marginTop: '0.5rem' }}>{error}</p>}
       </div>
 
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-
-      <h2>Recordings</h2>
-      <ul>
+      <h2 style={{ color: '#333' }}>Recordings</h2>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {recordings.map((rec, i) => (
-          <li key={i} style={{ marginBottom: '1rem' }}>
-            <strong>{rec.name}</strong><br />
-            <audio controls src={rec.url} style={{ display: 'block', marginTop: '0.5rem' }} />
-            <a href={rec.url} download={`${rec.name}.${isSafari ? 'mp4' : 'webm'}`} style={{ fontSize: '0.9rem' }}>Download</a>
-          </li>
+          <div key={i} style={{ backgroundColor: 'white', padding: '1rem', borderRadius: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.1)' }}>
+            <strong>{rec.name}</strong>
+            <audio controls src={rec.url} style={{ display: 'block', marginTop: '0.5rem', width: '100%' }} />
+            <div style={{ marginTop: '0.5rem' }}>
+              <a href={rec.url} download={`${rec.name}.${isSafari ? 'mp4' : 'webm'}`} style={{ marginRight: '1rem', color: '#1976d2' }}>Download</a>
+              <button onClick={() => deleteRecording(i)} style={{ background: 'none', color: '#f44336', border: 'none', cursor: 'pointer' }}>Delete</button>
+            </div>
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
 };
