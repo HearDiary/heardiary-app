@@ -15,9 +15,7 @@ const App = () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      const options = { mimeType: 'audio/mp4' }; // viac kompatibilné
-      const mediaRecorder = new MediaRecorder(stream, options);
-
+      const mediaRecorder = new MediaRecorder(stream);
       audioChunksRef.current = [];
 
       mediaRecorder.ondataavailable = (event) => {
@@ -27,22 +25,24 @@ const App = () => {
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/mp4' });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        setRecordings((prev) => [
-          ...prev,
-          { name: recordingName || 'Untitled', url: audioUrl },
-        ]);
-        setRecordingName('');
-        setIsRecording(false);
+        setTimeout(() => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          setRecordings((prev) => [
+            ...prev,
+            { name: recordingName || 'Untitled', url: audioUrl },
+          ]);
+          setRecordingName('');
+          setIsRecording(false);
+        }, 200); // krátka pauza pre Safari
       };
 
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start();
       setIsRecording(true);
     } catch (error) {
-      console.error('Microphone access error:', error);
-      alert('Please allow microphone access to record.');
+      console.error('Microphone error:', error);
+      alert('Please allow microphone access.');
     }
   };
 
