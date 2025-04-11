@@ -1,7 +1,7 @@
 // main.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-import logo from './assets/logo.svg'; // Pridaj svoj správny názov loga z balíka
+import logo from './assets/logo_icon_256.png'; // Pridaj svoj správny názov loga z balíka
 
 const App = () => {
   const [recordings, setRecordings] = useState<{ name: string; url: string }[]>([]);
