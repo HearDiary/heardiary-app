@@ -11,6 +11,7 @@ const App = () => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -25,6 +26,7 @@ const App = () => {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
@@ -42,9 +44,12 @@ const App = () => {
       };
 
       mediaRecorder.onstop = () => {
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
         }
+
         const duration = formatTime(elapsedTime);
         setElapsedTime(0);
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
@@ -64,7 +69,7 @@ const App = () => {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current) {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
   };
