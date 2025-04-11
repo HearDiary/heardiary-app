@@ -7,9 +7,10 @@ const App = () => {
   const [recordings, setRecordings] = useState<{ name: string; url: string; time: string }[]>([]);
   const [recordingName, setRecordingName] = useState('');
   const [isRecording, setIsRecording] = useState(false);
+  const [elapsedTime, setElapsedTime] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const startTimeRef = useRef<number>(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -27,8 +28,12 @@ const App = () => {
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
-      startTimeRef.current = Date.now();
+      setElapsedTime(0);
       setIsRecording(true);
+
+      intervalRef.current = setInterval(() => {
+        setElapsedTime((prev) => prev + 1);
+      }, 1000);
 
       mediaRecorder.ondataavailable = event => {
         if (event.data.size > 0) {
@@ -37,8 +42,11 @@ const App = () => {
       };
 
       mediaRecorder.onstop = () => {
-        const endTime = Date.now();
-        const duration = formatTime((endTime - startTimeRef.current) / 1000);
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+        }
+        const duration = formatTime(elapsedTime);
+        setElapsedTime(0);
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
         const audioUrl = URL.createObjectURL(audioBlob);
         setRecordings(prev => [
@@ -104,6 +112,11 @@ const App = () => {
           Stop Recording
         </button>
       </div>
+      {isRecording && (
+        <div style={{ marginBottom: '1rem', fontSize: '1.1rem', color: '#333' }}>
+          Recording time: {formatTime(elapsedTime)}
+        </div>
+      )}
       <h2 style={{ marginTop: '2rem' }}>Recordings</h2>
       <ul style={{ listStyle: 'none', padding: 0 }}>
         {recordings.map((rec, index) => (
