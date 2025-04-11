@@ -3,12 +3,12 @@ import ReactDOM from 'react-dom/client';
 import logo from './assets/logo_icon_256.png';
 
 const App = () => {
-  const [recordings, setRecordings] = useState([]);
+  const [recordings, setRecordings] = useState<{ name: string; url: string }[]>([]);
   const [recordingName, setRecordingName] = useState('');
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
   const [recordingTime, setRecordingTime] = useState(0);
-  const intervalRef = useRef(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const startRecording = async () => {
     try {
@@ -24,65 +24,81 @@ const App = () => {
       };
 
       mediaRecorder.onstop = () => {
-        clearInterval(intervalRef.current);
-        setRecordingTime(0);
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
         const audioUrl = URL.createObjectURL(audioBlob);
-        setRecordings((prev) => [
-          ...prev,
-          { name: recordingName || 'Untitled', url: audioUrl }
-        ]);
+        setRecordings((prev) => [...prev, { name: recordingName || 'Untitled', url: audioUrl }]);
         setRecordingName('');
+        clearInterval(intervalRef.current!);
+        setRecordingTime(0);
       };
 
       mediaRecorder.start();
       intervalRef.current = setInterval(() => {
-        setRecordingTime((prev) => prev + 1);
+        setRecordingTime((t) => t + 1);
       }, 1000);
     } catch (error) {
       console.error('Error accessing microphone:', error);
-      alert('Please allow microphone access to record audio.');
+      alert('Please allow microphone access.');
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current) {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
   };
 
-  const deleteRecording = (index) => {
+  const deleteRecording = (index: number) => {
     setRecordings((prev) => prev.filter((_, i) => i !== index));
   };
 
   return (
-    <div style={{ fontFamily: 'Arial', padding: '1rem' }}>
-      <img src={logo} alt="HearDiary Logo" style={{ width: '64px', marginBottom: '1rem' }} />
-      <h1>HearDiary</h1>
-      <input
-        type="text"
-        placeholder="Enter recording name..."
-        value={recordingName}
-        onChange={(e) => setRecordingName(e.target.value)}
-        style={{ padding: '0.5rem', marginRight: '0.5rem' }}
-      />
-      <button onClick={startRecording} style={{ padding: '0.5rem 1rem', backgroundColor: '#4CAF50', color: '#fff', border: 'none', marginRight: '0.5rem', borderRadius: '8px' }}>
-        🎤 Start Recording
-      </button>
-      <button onClick={stopRecording} style={{ padding: '0.5rem 1rem', backgroundColor: '#f44336', color: '#fff', border: 'none', borderRadius: '8px' }}>
-        🔴 Stop Recording
-      </button>
-      <div style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: '#888' }}>
-        {recordingTime > 0 && `Recording: ${recordingTime}s`}
+    <div className="min-h-screen bg-white text-gray-900 flex flex-col items-center p-6">
+      <img src={logo} alt="HearDiary Logo" className="w-16 h-16 mb-4" />
+      <h1 className="text-3xl font-bold mb-4">HearDiary</h1>
+      <div className="flex flex-col items-center mb-6">
+        <input
+          type="text"
+          placeholder="Enter recording name..."
+          className="border rounded p-2 mb-2 text-center"
+          value={recordingName}
+          onChange={(e) => setRecordingName(e.target.value)}
+        />
+        <div className="flex gap-4">
+          <button
+            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+            onClick={startRecording}
+          >
+            Start Recording
+          </button>
+          <button
+            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+            onClick={stopRecording}
+          >
+            Stop Recording
+          </button>
+        </div>
+        {recordingTime > 0 && (
+          <div className="mt-2 text-sm text-gray-600">Recording time: {recordingTime}s</div>
+        )}
       </div>
 
-      <h2 style={{ marginTop: '2rem' }}>Recordings</h2>
-      <ul style={{ paddingLeft: '1.2rem' }}>
+      <h2 className="text-xl font-semibold mb-2">Recordings</h2>
+      <ul className="w-full max-w-md space-y-3">
         {recordings.map((rec, index) => (
-          <li key={index} style={{ marginBottom: '1rem' }}>
-            <strong>{rec.name}</strong> –
-            <audio controls src={rec.url} style={{ display: 'block', marginTop: '0.5rem' }} />
-            <button onClick={() => deleteRecording(index)} style={{ marginTop: '0.3rem', background: '#ddd', border: 'none', padding: '0.3rem 0.5rem', borderRadius: '6px' }}>Delete</button>
+          <li key={index} className="bg-gray-100 rounded-xl p-4 flex items-center justify-between">
+            <div className="flex-1">
+              <strong>{rec.name}</strong>
+              <audio controls className="w-full mt-1">
+                <source src={rec.url} type="audio/wav" />
+              </audio>
+            </div>
+            <button
+              className="text-red-600 ml-4 hover:text-red-800"
+              onClick={() => deleteRecording(index)}
+            >
+              ✖
+            </button>
           </li>
         ))}
       </ul>
@@ -90,4 +106,5 @@ const App = () => {
   );
 };
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+const root = ReactDOM.createRoot(document.getElementById('root')!);
+root.render(<App />);
