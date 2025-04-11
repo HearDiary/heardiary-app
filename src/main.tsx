@@ -1,4 +1,3 @@
-// main.tsx
 import React, { useState, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 
@@ -15,7 +14,10 @@ const App = () => {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+
+      const options = { mimeType: 'audio/mp4' }; // viac kompatibilné
+      const mediaRecorder = new MediaRecorder(stream, options);
+
       audioChunksRef.current = [];
 
       mediaRecorder.ondataavailable = (event) => {
@@ -25,7 +27,7 @@ const App = () => {
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/mp4' });
         const audioUrl = URL.createObjectURL(audioBlob);
         setRecordings((prev) => [
           ...prev,
@@ -39,8 +41,8 @@ const App = () => {
       mediaRecorder.start();
       setIsRecording(true);
     } catch (error) {
-      console.error('Microphone access denied:', error);
-      alert('Microphone access is required to record.');
+      console.error('Microphone access error:', error);
+      alert('Please allow microphone access to record.');
     }
   };
 
