@@ -5,6 +5,8 @@ import ReactDOM from 'react-dom/client';
 const App = () => {
   const [recordings, setRecordings] = useState<{ name: string; url: string }[]>([]);
   const [recordingName, setRecordingName] = useState('');
+  const [isRecording, setIsRecording] = useState(false); // 👈 stav pre vizuálnu spätnú väzbu
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
@@ -14,6 +16,7 @@ const App = () => {
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
+      setIsRecording(true); // ✅ začiatok nahrávania
 
       mediaRecorder.ondataavailable = event => {
         if (event.data.size > 0) {
@@ -26,8 +29,9 @@ const App = () => {
         const audioUrl = URL.createObjectURL(audioBlob);
         setRecordings(prev => [...prev, { name: recordingName || 'Untitled', url: audioUrl }]);
         setRecordingName('');
+        setIsRecording(false); // ✅ koniec nahrávania
 
-        // Uvoľnenie mikrofónu
+        // Uvoľniť mikrofón
         stream.getTracks().forEach(track => track.stop());
       };
 
@@ -53,11 +57,21 @@ const App = () => {
         value={recordingName}
         onChange={e => setRecordingName(e.target.value)}
       />
-      <button onClick={startRecording} style={{ marginLeft: '0.5rem' }}>
-        Start Recording
+
+      <button
+        onClick={startRecording}
+        disabled={isRecording}
+        style={{ marginLeft: '0.5rem', backgroundColor: isRecording ? '#ccc' : '#4caf50', color: 'white' }}
+      >
+        🎙️ {isRecording ? 'Recording...' : 'Start Recording'}
       </button>
-      <button onClick={stopRecording} style={{ marginLeft: '0.5rem' }}>
-        Stop Recording
+
+      <button
+        onClick={stopRecording}
+        disabled={!isRecording}
+        style={{ marginLeft: '0.5rem', backgroundColor: '#f44336', color: 'white' }}
+      >
+        ⏹️ Stop Recording
       </button>
 
       <h2 style={{ marginTop: '2rem' }}>Recordings</h2>
