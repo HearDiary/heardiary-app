@@ -1,11 +1,11 @@
-// main.tsx
+// main.tsx – verzia s base64 ukladaním záznamov
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import logo from './assets/logo_icon_256.png';
 
 const App = () => {
-  const [recordings, setRecordings] = useState<{ name: string; url: string; time: string }[]>(() => {
-    const stored = localStorage.getItem('hearDiaryRecordings');
+  const [recordings, setRecordings] = useState<{ name: string; dataUrl: string; time: string }[]>(() => {
+    const stored = localStorage.getItem('hearDiaryBase64Recordings');
     return stored ? JSON.parse(stored) : [];
   });
   const [recordingName, setRecordingName] = useState('');
@@ -18,7 +18,7 @@ const App = () => {
   const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
-    localStorage.setItem('hearDiaryRecordings', JSON.stringify(recordings));
+    localStorage.setItem('hearDiaryBase64Recordings', JSON.stringify(recordings));
   }, [recordings]);
 
   const formatTime = (seconds: number) => {
@@ -30,6 +30,17 @@ const App = () => {
   const getTimestamp = () => {
     const now = new Date();
     return now.toLocaleString();
+  };
+
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        resolve(reader.result as string);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
   };
 
   const startRecording = async () => {
@@ -52,7 +63,7 @@ const App = () => {
         }
       };
 
-      mediaRecorder.onstop = () => {
+      mediaRecorder.onstop = async () => {
         if (intervalRef.current) clearInterval(intervalRef.current);
         if (streamRef.current) {
           streamRef.current.getTracks().forEach((track) => track.stop());
@@ -62,9 +73,9 @@ const App = () => {
         const duration = formatTime(elapsedTime);
         setElapsedTime(0);
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
-        const audioUrl = URL.createObjectURL(audioBlob);
+        const dataUrl = await blobToBase64(audioBlob);
         const name = recordingName.trim() || `Recording ${getTimestamp()}`;
-        setRecordings((prev) => [...prev, { name, url: audioUrl, time: duration }]);
+        setRecordings((prev) => [...prev, { name, dataUrl, time: duration }]);
         setRecordingName('');
         setIsRecording(false);
       };
@@ -135,10 +146,10 @@ const App = () => {
         {recordings.map((rec, index) => (
           <li key={index} style={{ marginBottom: '1.5rem' }}>
             <strong>{rec.name}</strong> ({rec.time})<br />
-            <audio controls src={rec.url} style={{ borderRadius: '10px', marginTop: '0.5rem' }} />
+            <audio controls src={rec.dataUrl} style={{ borderRadius: '10px', marginTop: '0.5rem' }} />
             <div style={{ marginTop: '0.5rem' }}>
               <a
-                href={rec.url}
+                href={rec.dataUrl}
                 download={rec.name + '.wav'}
                 style={{ marginRight: '1rem', backgroundColor: '#2196f3', color: '#fff', padding: '0.3rem 0.6rem', borderRadius: '6px', textDecoration: 'none' }}
               >
