@@ -1,10 +1,17 @@
-// main.tsx – verzia s base64 ukladaním záznamov
+// main.tsx – s možnosťou poznámky ku každej nahrávke
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import logo from './assets/logo_icon_256.png';
 
+interface Recording {
+  name: string;
+  dataUrl: string;
+  time: string;
+  note?: string;
+}
+
 const App = () => {
-  const [recordings, setRecordings] = useState<{ name: string; dataUrl: string; time: string }[]>(() => {
+  const [recordings, setRecordings] = useState<Recording[]>(() => {
     const stored = localStorage.getItem('hearDiaryBase64Recordings');
     return stored ? JSON.parse(stored) : [];
   });
@@ -75,7 +82,7 @@ const App = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
         const dataUrl = await blobToBase64(audioBlob);
         const name = recordingName.trim() || `Recording ${getTimestamp()}`;
-        setRecordings((prev) => [...prev, { name, dataUrl, time: duration }]);
+        setRecordings((prev) => [...prev, { name, dataUrl, time: duration, note: '' }]);
         setRecordingName('');
         setIsRecording(false);
       };
@@ -96,6 +103,14 @@ const App = () => {
     setRecordings((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const updateNote = (index: number, note: string) => {
+    setRecordings((prev) => {
+      const updated = [...prev];
+      updated[index].note = note;
+      return updated;
+    });
+  };
+
   const toggleTheme = () => {
     setDarkMode((prev) => !prev);
   };
@@ -104,9 +119,7 @@ const App = () => {
     <div style={{
       fontFamily: 'Arial',
       textAlign: 'center',
-      background: darkMode
-        ? 'linear-gradient(to bottom, #1e1e1e, #2c2c2c)'
-        : 'linear-gradient(to bottom, #f0f4f8, #d9e2ec)',
+      background: darkMode ? 'linear-gradient(to bottom, #1e1e1e, #2c2c2c)' : 'linear-gradient(to bottom, #f0f4f8, #d9e2ec)',
       color: darkMode ? '#eee' : '#000',
       minHeight: '100vh',
       padding: '2rem'
@@ -144,9 +157,15 @@ const App = () => {
       <h2 style={{ marginTop: '2rem' }}>Recordings</h2>
       <ul style={{ listStyle: 'none', padding: 0 }}>
         {recordings.map((rec, index) => (
-          <li key={index} style={{ marginBottom: '1.5rem' }}>
+          <li key={index} style={{ marginBottom: '2rem' }}>
             <strong>{rec.name}</strong> ({rec.time})<br />
-            <audio controls src={rec.dataUrl} style={{ borderRadius: '10px', marginTop: '0.5rem' }} />
+            <audio controls src={rec.dataUrl} style={{ borderRadius: '10px', marginTop: '0.5rem' }} /><br />
+            <textarea
+              placeholder="Add a note..."
+              value={rec.note || ''}
+              onChange={(e) => updateNote(index, e.target.value)}
+              style={{ width: '80%', maxWidth: '400px', marginTop: '0.5rem', padding: '0.5rem', borderRadius: '8px', border: '1px solid #ccc' }}
+            />
             <div style={{ marginTop: '0.5rem' }}>
               <a
                 href={rec.dataUrl}
