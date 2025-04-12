@@ -1,4 +1,4 @@
-// main.tsx – s možnosťou poznámky ku každej nahrávke
+// main.tsx – verzia s kolekciami, triedením podľa dátumu a denným "soundprintom"
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import logo from './assets/logo_icon_256.png';
@@ -8,6 +8,7 @@ interface Recording {
   dataUrl: string;
   time: string;
   note?: string;
+  date: string;
 }
 
 const App = () => {
@@ -23,6 +24,8 @@ const App = () => {
   const audioChunksRef = useRef<Blob[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const playlistRef = useRef<HTMLAudioElement | null>(null);
+  const [isPlayingSoundprint, setIsPlayingSoundprint] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('hearDiaryBase64Recordings', JSON.stringify(recordings));
@@ -39,12 +42,15 @@ const App = () => {
     return now.toLocaleString();
   };
 
+  const getDateString = () => {
+    const now = new Date();
+    return now.toISOString().split('T')[0];
+  };
+
   const blobToBase64 = (blob: Blob): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        resolve(reader.result as string);
-      };
+      reader.onloadend = () => resolve(reader.result as string);
       reader.onerror = reject;
       reader.readAsDataURL(blob);
     });
@@ -82,7 +88,8 @@ const App = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
         const dataUrl = await blobToBase64(audioBlob);
         const name = recordingName.trim() || `Recording ${getTimestamp()}`;
-        setRecordings((prev) => [...prev, { name, dataUrl, time: duration, note: '' }]);
+        const date = getDateString();
+        setRecordings((prev) => [...prev, { name, dataUrl, time: duration, note: '', date }]);
         setRecordingName('');
         setIsRecording(false);
       };
@@ -111,19 +118,45 @@ const App = () => {
     });
   };
 
-  const toggleTheme = () => {
-    setDarkMode((prev) => !prev);
+  const toggleTheme = () => setDarkMode((prev) => !prev);
+
+  const groupByDate = (recs: Recording[]) => {
+    const groups: Record<string, Recording[]> = {};
+    for (const r of recs) {
+      if (!groups[r.date]) groups[r.date] = [];
+      groups[r.date].push(r);
+    }
+    return groups;
   };
 
+  const playSoundprint = (date: string) => {
+    const todays = recordings.filter((r) => r.date === date);
+    if (todays.length === 0) return;
+
+    let current = 0;
+    const audio = new Audio(todays[current].dataUrl);
+    playlistRef.current = audio;
+    setIsPlayingSoundprint(true);
+
+    audio.onended = () => {
+      current++;
+      if (current < todays.length) {
+        const next = new Audio(todays[current].dataUrl);
+        playlistRef.current = next;
+        next.onended = audio.onended;
+        next.play();
+      } else {
+        setIsPlayingSoundprint(false);
+      }
+    };
+    audio.play();
+  };
+
+  const grouped = groupByDate(recordings);
+  const sortedDates = Object.keys(grouped).sort((a, b) => (a < b ? 1 : -1));
+
   return (
-    <div style={{
-      fontFamily: 'Arial',
-      textAlign: 'center',
-      background: darkMode ? 'linear-gradient(to bottom, #1e1e1e, #2c2c2c)' : 'linear-gradient(to bottom, #f0f4f8, #d9e2ec)',
-      color: darkMode ? '#eee' : '#000',
-      minHeight: '100vh',
-      padding: '2rem'
-    }}>
+    <div style={{ fontFamily: 'Arial', textAlign: 'center', background: darkMode ? 'linear-gradient(to bottom, #1e1e1e, #2c2c2c)' : 'linear-gradient(to bottom, #f0f4f8, #d9e2ec)', color: darkMode ? '#eee' : '#000', minHeight: '100vh', padding: '2rem' }}>
       <button onClick={toggleTheme} style={{ position: 'absolute', top: 16, right: 16 }}>
         {darkMode ? '☀️ Light' : '🌙 Dark'}
       </button>
@@ -136,54 +169,48 @@ const App = () => {
         style={{ padding: '0.5rem', borderRadius: '10px', border: '1px solid #ccc', marginBottom: '1rem', width: '80%', maxWidth: '300px' }}
       />
       <div style={{ margin: '1rem' }}>
-        <button
-          onClick={startRecording}
-          disabled={isRecording}
-          style={{ backgroundColor: '#4caf50', color: 'white', border: 'none', padding: '0.6rem 1rem', borderRadius: '12px', marginRight: '1rem', cursor: 'pointer' }}>
-          Start Recording
-        </button>
-        <button
-          onClick={stopRecording}
-          disabled={!isRecording}
-          style={{ backgroundColor: '#f44336', color: 'white', border: 'none', padding: '0.6rem 1rem', borderRadius: '12px', cursor: 'pointer' }}>
-          Stop Recording
-        </button>
+        <button onClick={startRecording} disabled={isRecording} style={{ backgroundColor: '#4caf50', color: 'white', border: 'none', padding: '0.6rem 1rem', borderRadius: '12px', marginRight: '1rem', cursor: 'pointer' }}>Start Recording</button>
+        <button onClick={stopRecording} disabled={!isRecording} style={{ backgroundColor: '#f44336', color: 'white', border: 'none', padding: '0.6rem 1rem', borderRadius: '12px', cursor: 'pointer' }}>Stop Recording</button>
       </div>
-      {isRecording && (
-        <div style={{ marginBottom: '1rem', fontSize: '1.1rem' }}>
-          Recording time: {formatTime(elapsedTime)}
-        </div>
-      )}
-      <h2 style={{ marginTop: '2rem' }}>Recordings</h2>
-      <ul style={{ listStyle: 'none', padding: 0 }}>
-        {recordings.map((rec, index) => (
-          <li key={index} style={{ marginBottom: '2rem' }}>
-            <strong>{rec.name}</strong> ({rec.time})<br />
-            <audio controls src={rec.dataUrl} style={{ borderRadius: '10px', marginTop: '0.5rem' }} /><br />
-            <textarea
-              placeholder="Add a note..."
-              value={rec.note || ''}
-              onChange={(e) => updateNote(index, e.target.value)}
-              style={{ width: '80%', maxWidth: '400px', marginTop: '0.5rem', padding: '0.5rem', borderRadius: '8px', border: '1px solid #ccc' }}
-            />
-            <div style={{ marginTop: '0.5rem' }}>
-              <a
-                href={rec.dataUrl}
-                download={rec.name + '.wav'}
-                style={{ marginRight: '1rem', backgroundColor: '#2196f3', color: '#fff', padding: '0.3rem 0.6rem', borderRadius: '6px', textDecoration: 'none' }}
-              >
-                Download
-              </a>
-              <button
-                onClick={() => deleteRecording(index)}
-                style={{ backgroundColor: '#999', color: '#fff', border: 'none', padding: '0.3rem 0.6rem', borderRadius: '6px', cursor: 'pointer' }}
-              >
-                Delete
-              </button>
+      {isRecording && <div style={{ marginBottom: '1rem', fontSize: '1.1rem' }}>Recording time: {formatTime(elapsedTime)}</div>}
+
+      <h2 style={{ marginTop: '2rem' }}>Your Soundprints</h2>
+      {sortedDates.map((date) => (
+        <div key={date} style={{ marginBottom: '2rem' }}>
+          <h3>{date}</h3>
+          <button
+            onClick={() => playSoundprint(date)}
+            disabled={isPlayingSoundprint}
+            style={{ marginBottom: '1rem', backgroundColor: '#6200ea', color: 'white', padding: '0.4rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer' }}>
+            ▶️ Play My Day
+          </button>
+          {grouped[date].map((rec, index) => (
+            <div key={index} style={{ marginBottom: '2rem' }}>
+              <strong>{rec.name}</strong> ({rec.time})<br />
+              <audio controls src={rec.dataUrl} style={{ borderRadius: '10px', marginTop: '0.5rem' }} /><br />
+              <textarea
+                placeholder="Add a note..."
+                value={rec.note || ''}
+                onChange={(e) => updateNote(recordings.indexOf(rec), e.target.value)}
+                style={{ width: '80%', maxWidth: '400px', marginTop: '0.5rem', padding: '0.5rem', borderRadius: '8px', border: '1px solid #ccc' }}
+              />
+              <div style={{ marginTop: '0.5rem' }}>
+                <a
+                  href={rec.dataUrl}
+                  download={rec.name + '.wav'}
+                  style={{ marginRight: '1rem', backgroundColor: '#2196f3', color: '#fff', padding: '0.3rem 0.6rem', borderRadius: '6px', textDecoration: 'none' }}>
+                  Download
+                </a>
+                <button
+                  onClick={() => deleteRecording(recordings.indexOf(rec))}
+                  style={{ backgroundColor: '#999', color: '#fff', border: 'none', padding: '0.3rem 0.6rem', borderRadius: '6px', cursor: 'pointer' }}>
+                  Delete
+                </button>
+              </div>
             </div>
-          </li>
-        ))}
-      </ul>
+          ))}
+        </div>
+      ))}
     </div>
   );
 };
