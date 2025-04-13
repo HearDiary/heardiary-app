@@ -1,4 +1,4 @@
-// AI-enhanced main.tsx (HearDiary with basic emotion detection based on volume)
+// AI-enhanced main.tsx (HearDiary with emotion + sound tag analysis)
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import logo from './assets/logo_icon_256.png';
@@ -11,6 +11,7 @@ interface Recording {
   date: string;
   aiScore?: number;
   emotion?: string;
+  soundTag?: string;
 }
 
 const App = () => {
@@ -51,12 +52,20 @@ const App = () => {
     reader.readAsDataURL(blob);
   });
 
-  const analyzeEmotionByVolume = (average: number): string => {
-    if (average > 80) return 'stressed';
-    if (average > 60) return 'happy';
-    if (average > 40) return 'calm';
-    if (average > 20) return 'nostalgic';
+  const analyzeEmotionByVolume = (avg: number): string => {
+    if (avg > 80) return 'stressed';
+    if (avg > 60) return 'happy';
+    if (avg > 40) return 'calm';
+    if (avg > 20) return 'nostalgic';
     return 'neutral';
+  };
+
+  const analyzeSoundTag = (avg: number, variance: number): string => {
+    if (avg < 10) return 'silence';
+    if (variance > 1000 && avg > 70) return 'music';
+    if (variance > 500) return 'urban';
+    if (avg > 50) return 'voice';
+    return 'nature';
   };
 
   const startRecording = async () => {
@@ -97,10 +106,12 @@ const App = () => {
         const name = recordingName.trim() || `Recording ${getTimestamp()}`;
         const date = getDateString();
         const aiScore = Math.random();
-        const averageVolume = volumeSamples.current.reduce((a, b) => a + b, 0) / volumeSamples.current.length;
-        const emotion = analyzeEmotionByVolume(averageVolume);
+        const avg = volumeSamples.current.reduce((a, b) => a + b, 0) / volumeSamples.current.length;
+        const variance = volumeSamples.current.reduce((a, b) => a + (b - avg) ** 2, 0) / volumeSamples.current.length;
+        const emotion = analyzeEmotionByVolume(avg);
+        const soundTag = analyzeSoundTag(avg, variance);
 
-        setRecordings((prev) => [...prev, { name, dataUrl, time: duration, note: '', date, aiScore, emotion }]);
+        setRecordings((prev) => [...prev, { name, dataUrl, time: duration, note: '', date, aiScore, emotion, soundTag }]);
         setRecordingName('');
         setIsRecording(false);
       };
@@ -192,7 +203,10 @@ const App = () => {
               <h4>{date}</h4>
               {grouped[date].map((rec, i) => (
                 <div key={i} style={{ padding: '1rem', marginBottom: '1rem', borderRadius: 10, background: darkMode ? '#222' : '#eee' }}>
-                  <strong>{rec.name}</strong> ({rec.time}) – {rec.emotion || 'Neutral'} – Score: {rec.aiScore?.toFixed(2)}<br />
+                  <strong>{rec.name}</strong> ({rec.time})<br />
+                  🎭 Emotion: {rec.emotion || 'Neutral'}<br />
+                  🔊 Tag: {rec.soundTag || 'Unknown'}<br />
+                  📊 Score: {rec.aiScore?.toFixed(2)}<br />
                   <audio controls src={rec.dataUrl} />
                   <textarea value={rec.note || ''} onChange={(e) => updateNote(recordings.indexOf(rec), e.target.value)} placeholder="Add note..." style={{ marginTop: '0.3rem', padding: '0.4rem', borderRadius: 8, width: '90%' }} />
                   <div>
