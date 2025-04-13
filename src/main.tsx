@@ -28,15 +28,19 @@ const App = () => {
   const streamRef = useRef<MediaStream | null>(null);
   const playlistRef = useRef<HTMLAudioElement | null>(null);
   const [isPlayingSoundprint, setIsPlayingSoundprint] = useState(false);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const [volume, setVolume] = useState(0);
 
   useEffect(() => {
     localStorage.setItem('hearDiaryBase64Recordings', JSON.stringify(recordings));
   }, [recordings]);
 
   useEffect(() => {
-    return () => {
-      if (playlistRef.current) playlistRef.current.pause();
-    };
+    if (section !== 'soundprint' && playlistRef.current) {
+      playlistRef.current.pause();
+      playlistRef.current = null;
+      setIsPlayingSoundprint(false);
+    }
   }, [section]);
 
   const formatTime = (seconds: number) => {
@@ -71,10 +75,26 @@ const App = () => {
       setIsRecording(true);
       intervalRef.current = setInterval(() => setElapsedTime((prev) => prev + 1), 1000);
 
+      const audioContext = new AudioContext();
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      source.connect(analyser);
+      analyserRef.current = analyser;
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const updateVolume = () => {
+        analyser.getByteFrequencyData(dataArray);
+        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+        setVolume(avg);
+        if (isRecording) requestAnimationFrame(updateVolume);
+      };
+      updateVolume();
+
       mediaRecorder.ondataavailable = (e) => e.data.size > 0 && audioChunksRef.current.push(e.data);
       mediaRecorder.onstop = async () => {
         if (intervalRef.current) clearInterval(intervalRef.current);
         if (streamRef.current) streamRef.current.getTracks().forEach((track) => track.stop());
+        setVolume(0);
 
         const duration = formatTime(elapsedTime);
         setElapsedTime(0);
@@ -89,7 +109,6 @@ const App = () => {
         setRecordingName('');
         setIsRecording(false);
       };
-
       mediaRecorder.start();
     } catch (error) {
       console.error('Mic error:', error);
@@ -102,7 +121,25 @@ const App = () => {
     }
   };
 
-  const stopPlayback = () => {
+  const playSoundprint = () => {
+    const todays = recordings.filter((r) => r.date === getDateString());
+    if (!todays.length) return;
+    let current = 0;
+    const playNext = () => {
+      const audio = new Audio(todays[current].dataUrl);
+      playlistRef.current = audio;
+      setIsPlayingSoundprint(true);
+      audio.onended = () => {
+        current++;
+        if (current < todays.length) playNext();
+        else setIsPlayingSoundprint(false);
+      };
+      audio.play();
+    };
+    playNext();
+  };
+
+  const stopSoundprint = () => {
     if (playlistRef.current) {
       playlistRef.current.pause();
       playlistRef.current = null;
@@ -110,65 +147,35 @@ const App = () => {
     }
   };
 
-  const playSoundprint = () => {
-    stopPlayback();
-    const todays = recordings.filter((r) => r.date === getDateString());
-    if (!todays.length) return;
-    let current = 0;
-    const audio = new Audio(todays[current].dataUrl);
-    playlistRef.current = audio;
-    setIsPlayingSoundprint(true);
-
-    audio.onended = () => {
-      current++;
-      if (current < todays.length) {
-        const next = new Audio(todays[current].dataUrl);
-        playlistRef.current = next;
-        next.onended = audio.onended;
-        next.play();
-      } else {
-        setIsPlayingSoundprint(false);
-      }
-    };
-    audio.play();
-  };
-
-  const deleteRecording = (index: number) => setRecordings((prev) => prev.filter((_, i) => i !== index));
-  const updateNote = (index: number, note: string) => {
-    setRecordings((prev) => {
-      const updated = [...prev];
-      updated[index].note = note;
-      return updated;
-    });
-  };
-
-  const toggleTheme = () => setDarkMode((prev) => !prev);
   const grouped = recordings.reduce((acc, rec) => {
     acc[rec.date] = acc[rec.date] || [];
     acc[rec.date].push(rec);
     return acc;
   }, {} as Record<string, Recording[]>);
+
   const sortedDates = Object.keys(grouped).sort((a, b) => (a < b ? 1 : -1));
 
   return (
     <div style={{ fontFamily: 'Arial', textAlign: 'center', background: darkMode ? '#121212' : '#f9f9f9', color: darkMode ? '#eee' : '#111', minHeight: '100vh' }}>
-      <button onClick={toggleTheme} style={{ position: 'absolute', top: 10, right: 16 }}>{darkMode ? '☀️' : '🌙'}</button>
+      <button onClick={() => setDarkMode(!darkMode)} style={{ position: 'absolute', top: 10, right: 16 }}>{darkMode ? '☀️' : '🌙'}</button>
       <img src={logo} alt="Logo" style={{ width: 56, margin: '1rem auto' }} />
 
       {section === 'record' && (
         <div>
           <h2>Record</h2>
-          <input
-            value={recordingName}
-            onChange={(e) => setRecordingName(e.target.value)}
-            placeholder="Recording name..."
-            style={{ padding: 10, borderRadius: 10, border: '1px solid #ccc' }}
-          />
+          <input value={recordingName} onChange={(e) => setRecordingName(e.target.value)} placeholder="Recording name..." style={{ padding: 10, borderRadius: 10, border: '1px solid #ccc' }} />
           <div style={{ margin: '1rem' }}>
             <button onClick={startRecording} disabled={isRecording} style={{ backgroundColor: '#43a047', color: 'white', padding: '0.5rem 1rem', borderRadius: 10, marginRight: 8 }}>Start</button>
             <button onClick={stopRecording} disabled={!isRecording} style={{ backgroundColor: '#e53935', color: 'white', padding: '0.5rem 1rem', borderRadius: 10 }}>Stop</button>
           </div>
-          {isRecording && <div>⏱ {formatTime(elapsedTime)}</div>}
+          {isRecording && (
+            <>
+              <div>⏱ {formatTime(elapsedTime)}</div>
+              <div style={{ marginTop: '1rem', width: '60%', height: 12, margin: '0 auto', background: '#ddd', borderRadius: 8 }}>
+                <div style={{ height: '100%', width: `${Math.min(volume, 100)}%`, background: '#4caf50', borderRadius: 8 }}></div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -180,17 +187,16 @@ const App = () => {
               <h4>{date}</h4>
               {grouped[date].map((rec, i) => (
                 <div key={i} style={{ padding: '1rem', marginBottom: '1rem', borderRadius: 10, background: darkMode ? '#222' : '#eee' }}>
-                  <strong>{rec.name}</strong> ({rec.time}) – {rec.emotion || 'Neutral'} – Score: {rec.aiScore?.toFixed(2)}<br />
+                  <strong>{rec.name}</strong> ({rec.time}) – <span style={{ color: '#8e24aa' }}>{rec.emotion}</span> – Score: {rec.aiScore?.toFixed(2)}<br />
                   <audio controls src={rec.dataUrl} />
-                  <textarea
-                    value={rec.note || ''}
-                    onChange={(e) => updateNote(recordings.indexOf(rec), e.target.value)}
-                    placeholder="Add note..."
-                    style={{ marginTop: '0.3rem', padding: '0.4rem', borderRadius: 8, width: '90%' }}
-                  />
+                  <textarea value={rec.note || ''} onChange={(e) => {
+                    const updated = [...recordings];
+                    updated[recordings.indexOf(rec)].note = e.target.value;
+                    setRecordings(updated);
+                  }} style={{ marginTop: '0.3rem', padding: '0.4rem', borderRadius: 8, width: '90%' }} placeholder="Add note..." />
                   <div>
                     <a href={rec.dataUrl} download={rec.name + '.wav'} style={{ color: '#2196f3', marginRight: '1rem' }}>Download</a>
-                    <button onClick={() => deleteRecording(recordings.indexOf(rec))} style={{ color: '#999' }}>Delete</button>
+                    <button onClick={() => setRecordings(prev => prev.filter((_, j) => j !== recordings.indexOf(rec)))} style={{ color: '#999' }}>Delete</button>
                   </div>
                 </div>
               ))}
@@ -202,19 +208,8 @@ const App = () => {
       {section === 'soundprint' && (
         <div>
           <h2>Soundprint</h2>
-          <button
-            onClick={playSoundprint}
-            disabled={isPlayingSoundprint}
-            style={{ backgroundColor: '#5e35b1', color: 'white', padding: '0.5rem 1.2rem', borderRadius: 10, marginBottom: 8 }}>
-            ▶️ Play My Day
-          </button>
-          {isPlayingSoundprint && (
-            <button
-              onClick={stopPlayback}
-              style={{ backgroundColor: '#f44336', color: 'white', padding: '0.4rem 1rem', borderRadius: 10 }}>
-              ⏹ Stop
-            </button>
-          )}
+          <button onClick={playSoundprint} disabled={isPlayingSoundprint} style={{ backgroundColor: '#5e35b1', color: 'white', padding: '0.5rem 1.2rem', borderRadius: 10, marginRight: 8 }}>▶️ Play My Day</button>
+          <button onClick={stopSoundprint} disabled={!isPlayingSoundprint} style={{ backgroundColor: '#757575', color: 'white', padding: '0.5rem 1.2rem', borderRadius: 10 }}>⏹ Stop</button>
         </div>
       )}
 
@@ -228,3 +223,4 @@ const App = () => {
 };
 
 ReactDOM.createRoot(document.getElementById('root')!).render(<App />);
+
