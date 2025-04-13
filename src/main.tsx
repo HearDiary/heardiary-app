@@ -103,7 +103,10 @@ const App = () => {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current?.state !== 'inactive') mediaRecorderRef.current.stop();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+  mediaRecorderRef.current.stop();
+}
+
   };
 
   const playSoundprint = () => {
