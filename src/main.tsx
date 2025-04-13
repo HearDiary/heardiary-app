@@ -1,4 +1,4 @@
-// main.tsx – verzia 1.1 s AI značkami a skóre (heuristiky)
+// main.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import logo from './assets/logo_icon_256.png';
@@ -10,7 +10,6 @@ interface Recording {
   note?: string;
   date: string;
   aiScore?: number;
-  aiTags?: string[];
 }
 
 const App = () => {
@@ -43,26 +42,13 @@ const App = () => {
   const getTimestamp = () => new Date().toLocaleString();
   const getDateString = () => new Date().toISOString().split('T')[0];
 
-  const blobToBase64 = (blob: Blob): Promise<string> => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-
-  const generateAITags = (blob: Blob, duration: number): { aiScore: number; aiTags: string[] } => {
-    const sizeKb = blob.size / 1024;
-    const tags: string[] = [];
-
-    if (duration < 10) tags.push('short');
-    else if (duration > 30) tags.push('long');
-    if (sizeKb < 100) tags.push('calm');
-    if (sizeKb > 400) tags.push('intense');
-    tags.push('voice');
-
-    const score = Math.min(1, (duration / 60 + sizeKb / 500) / 2);
-    return { aiScore: parseFloat(score.toFixed(2)), aiTags: tags };
-  };
+  const blobToBase64 = (blob: Blob): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
 
   const startRecording = async () => {
     try {
@@ -80,15 +66,14 @@ const App = () => {
         if (intervalRef.current) clearInterval(intervalRef.current);
         if (streamRef.current) streamRef.current.getTracks().forEach((track) => track.stop());
 
-        const duration = elapsedTime;
+        const duration = formatTime(elapsedTime);
         setElapsedTime(0);
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
         const dataUrl = await blobToBase64(audioBlob);
         const name = recordingName.trim() || `Recording ${getTimestamp()}`;
         const date = getDateString();
-        const { aiScore, aiTags } = generateAITags(audioBlob, duration);
-
-        setRecordings((prev) => [...prev, { name, dataUrl, time: formatTime(duration), note: '', date, aiScore, aiTags }]);
+        const aiScore = Math.random();
+        setRecordings((prev) => [...prev, { name, dataUrl, time: duration, note: '', date, aiScore }]);
         setRecordingName('');
         setIsRecording(false);
       };
@@ -100,7 +85,12 @@ const App = () => {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current?.state !== 'inactive') mediaRecorderRef.current.stop();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+    }
   };
 
   const deleteRecording = (index: number) => setRecordings((prev) => prev.filter((_, i) => i !== index));
@@ -144,7 +134,13 @@ const App = () => {
   };
 
   return (
-    <div style={{ fontFamily: 'Arial', textAlign: 'center', background: darkMode ? '#1e1e1e' : '#f0f4f8', color: darkMode ? '#eee' : '#000', minHeight: '100vh' }}>
+    <div style={{
+      fontFamily: 'Arial',
+      textAlign: 'center',
+      background: darkMode ? '#1e1e1e' : '#f0f4f8',
+      color: darkMode ? '#eee' : '#000',
+      minHeight: '100vh'
+    }}>
       <button onClick={toggleTheme} style={{ position: 'absolute', top: 10, right: 16 }}>{darkMode ? '☀️' : '🌙'}</button>
       <img src={logo} alt="Logo" style={{ width: 48, margin: '1rem auto' }} />
 
@@ -158,8 +154,14 @@ const App = () => {
             style={{ padding: '0.5rem', borderRadius: 8, border: '1px solid #ccc' }}
           />
           <div style={{ margin: '1rem' }}>
-            <button onClick={startRecording} disabled={isRecording} style={{ background: '#4caf50', color: '#fff', borderRadius: 8, padding: '0.5rem 1rem', marginRight: 8 }}>Start</button>
-            <button onClick={stopRecording} disabled={!isRecording} style={{ background: '#f44336', color: '#fff', borderRadius: 8, padding: '0.5rem 1rem' }}>Stop</button>
+            <button onClick={startRecording} disabled={isRecording}
+              style={{ background: '#4caf50', color: '#fff', borderRadius: 8, padding: '0.5rem 1rem', marginRight: 8 }}>
+              Start
+            </button>
+            <button onClick={stopRecording} disabled={!isRecording}
+              style={{ background: '#f44336', color: '#fff', borderRadius: 8, padding: '0.5rem 1rem' }}>
+              Stop
+            </button>
           </div>
           {isRecording && <div>⏱ {formatTime(elapsedTime)}</div>}
         </div>
@@ -173,8 +175,7 @@ const App = () => {
               <h4>{date}</h4>
               {grouped[date].map((rec, i) => (
                 <div key={i} style={{ marginBottom: '1rem' }}>
-                  <strong>{rec.name}</strong> ({rec.time})<br />
-                  <em>Score: {rec.aiScore?.toFixed(2)} ({rec.aiTags?.join(', ')})</em><br />
+                  <strong>{rec.name}</strong> ({rec.time}) – Score: {rec.aiScore?.toFixed(2)}<br />
                   <audio controls src={rec.dataUrl} /><br />
                   <textarea
                     value={rec.note || ''}
@@ -205,7 +206,12 @@ const App = () => {
         </div>
       )}
 
-      <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, display: 'flex', justifyContent: 'space-around', background: darkMode ? '#111' : '#fff', borderTop: '1px solid #ccc', padding: '0.5rem 0' }}>
+      <nav style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        display: 'flex', justifyContent: 'space-around',
+        background: darkMode ? '#111' : '#fff',
+        borderTop: '1px solid #ccc', padding: '0.5rem 0'
+      }}>
         <button onClick={() => setSection('record')} style={{ background: 'none', border: 'none' }}>{section === 'record' ? '🎙️' : '🎙'}</button>
         <button onClick={() => setSection('diary')} style={{ background: 'none', border: 'none' }}>{section === 'diary' ? '📁' : '📂'}</button>
         <button onClick={() => setSection('soundprint')} style={{ background: 'none', border: 'none' }}>{section === 'soundprint' ? '🎧' : '🎵'}</button>
