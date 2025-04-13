@@ -1,4 +1,4 @@
-// AI-enhanced main.tsx (HearDiary - full version with audio controls and soundprint stop)
+// AI-enhanced main.tsx (HearDiary with basic emotion detection based on volume)
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import logo from './assets/logo_icon_256.png';
@@ -29,6 +29,7 @@ const App = () => {
   const streamRef = useRef<MediaStream | null>(null);
   const playlistRef = useRef<HTMLAudioElement | null>(null);
   const [isPlayingSoundprint, setIsPlayingSoundprint] = useState(false);
+  const volumeSamples = useRef<number[]>([]);
 
   useEffect(() => {
     localStorage.setItem('hearDiaryBase64Recordings', JSON.stringify(recordings));
@@ -50,9 +51,12 @@ const App = () => {
     reader.readAsDataURL(blob);
   });
 
-  const analyzeEmotion = (): string => {
-    const emotions = ['calm', 'happy', 'nostalgic', 'stressed', 'neutral'];
-    return emotions[Math.floor(Math.random() * emotions.length)];
+  const analyzeEmotionByVolume = (average: number): string => {
+    if (average > 80) return 'stressed';
+    if (average > 60) return 'happy';
+    if (average > 40) return 'calm';
+    if (average > 20) return 'nostalgic';
+    return 'neutral';
   };
 
   const startRecording = async () => {
@@ -62,14 +66,29 @@ const App = () => {
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
+      volumeSamples.current = [];
       setElapsedTime(0);
       setIsRecording(true);
       intervalRef.current = setInterval(() => setElapsedTime((prev) => prev + 1), 1000);
 
+      const audioContext = new AudioContext();
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      source.connect(analyser);
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+      const trackVolume = () => {
+        analyser.getByteFrequencyData(dataArray);
+        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+        volumeSamples.current.push(avg);
+        if (isRecording) requestAnimationFrame(trackVolume);
+      };
+      trackVolume();
+
       mediaRecorder.ondataavailable = (e) => e.data.size > 0 && audioChunksRef.current.push(e.data);
       mediaRecorder.onstop = async () => {
-        intervalRef.current && clearInterval(intervalRef.current);
-        streamRef.current?.getTracks().forEach((track) => track.stop());
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        if (streamRef.current) streamRef.current.getTracks().forEach((track) => track.stop());
 
         const duration = formatTime(elapsedTime);
         setElapsedTime(0);
@@ -78,7 +97,8 @@ const App = () => {
         const name = recordingName.trim() || `Recording ${getTimestamp()}`;
         const date = getDateString();
         const aiScore = Math.random();
-        const emotion = analyzeEmotion();
+        const averageVolume = volumeSamples.current.reduce((a, b) => a + b, 0) / volumeSamples.current.length;
+        const emotion = analyzeEmotionByVolume(averageVolume);
 
         setRecordings((prev) => [...prev, { name, dataUrl, time: duration, note: '', date, aiScore, emotion }]);
         setRecordingName('');
@@ -151,15 +171,11 @@ const App = () => {
     <div style={{ fontFamily: 'Arial', textAlign: 'center', background: darkMode ? '#121212' : '#f9f9f9', color: darkMode ? '#eee' : '#111', minHeight: '100vh' }}>
       <button onClick={toggleTheme} style={{ position: 'absolute', top: 10, right: 16 }}>{darkMode ? '☀️' : '🌙'}</button>
       <img src={logo} alt="Logo" style={{ width: 56, margin: '1rem auto' }} />
+
       {section === 'record' && (
         <div>
           <h2>Record</h2>
-          <input
-            value={recordingName}
-            onChange={(e) => setRecordingName(e.target.value)}
-            placeholder="Recording name..."
-            style={{ padding: 10, borderRadius: 10, border: '1px solid #ccc' }}
-          />
+          <input value={recordingName} onChange={(e) => setRecordingName(e.target.value)} placeholder="Recording name..." style={{ padding: 10, borderRadius: 10, border: '1px solid #ccc' }} />
           <div style={{ margin: '1rem' }}>
             <button onClick={startRecording} disabled={isRecording} style={{ backgroundColor: '#43a047', color: 'white', padding: '0.5rem 1rem', borderRadius: 10, marginRight: 8 }}>Start</button>
             <button onClick={stopRecording} disabled={!isRecording} style={{ backgroundColor: '#e53935', color: 'white', padding: '0.5rem 1rem', borderRadius: 10 }}>Stop</button>
@@ -178,12 +194,7 @@ const App = () => {
                 <div key={i} style={{ padding: '1rem', marginBottom: '1rem', borderRadius: 10, background: darkMode ? '#222' : '#eee' }}>
                   <strong>{rec.name}</strong> ({rec.time}) – {rec.emotion || 'Neutral'} – Score: {rec.aiScore?.toFixed(2)}<br />
                   <audio controls src={rec.dataUrl} />
-                  <textarea
-                    value={rec.note || ''}
-                    onChange={(e) => updateNote(recordings.indexOf(rec), e.target.value)}
-                    placeholder="Add note..."
-                    style={{ marginTop: '0.3rem', padding: '0.4rem', borderRadius: 8, width: '90%' }}
-                  />
+                  <textarea value={rec.note || ''} onChange={(e) => updateNote(recordings.indexOf(rec), e.target.value)} placeholder="Add note..." style={{ marginTop: '0.3rem', padding: '0.4rem', borderRadius: 8, width: '90%' }} />
                   <div>
                     <a href={rec.dataUrl} download={rec.name + '.wav'} style={{ color: '#2196f3', marginRight: '1rem' }}>Download</a>
                     <button onClick={() => deleteRecording(recordings.indexOf(rec))} style={{ color: '#999' }}>Delete</button>
@@ -198,15 +209,8 @@ const App = () => {
       {section === 'soundprint' && (
         <div>
           <h2>Soundprint</h2>
-          <button
-            onClick={playSoundprint}
-            disabled={isPlayingSoundprint}
-            style={{ backgroundColor: '#5e35b1', color: 'white', padding: '0.5rem 1.2rem', borderRadius: 10, marginRight: 10 }}>
-            ▶️ Play My Day
-          </button>
-          {isPlayingSoundprint && (
-            <button onClick={stopSoundprint} style={{ backgroundColor: '#e53935', color: 'white', padding: '0.5rem 1.2rem', borderRadius: 10 }}>⏹ Stop</button>
-          )}
+          <button onClick={playSoundprint} disabled={isPlayingSoundprint} style={{ backgroundColor: '#5e35b1', color: 'white', padding: '0.5rem 1.2rem', borderRadius: 10, marginRight: 10 }}>▶️ Play My Day</button>
+          {isPlayingSoundprint && (<button onClick={stopSoundprint} style={{ backgroundColor: '#e53935', color: 'white', padding: '0.5rem 1.2rem', borderRadius: 10 }}>⏹ Stop</button>)}
         </div>
       )}
 
