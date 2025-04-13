@@ -1,4 +1,3 @@
-// main.tsx (kompletná verzia s opravou TS18047, grafikou a AI rozšíreniami)
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import logo from './assets/logo_icon_256.png';
@@ -23,12 +22,13 @@ const App = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [darkMode, setDarkMode] = useState(false);
+  const [isPlayingSoundprint, setIsPlayingSoundprint] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const playlistRef = useRef<HTMLAudioElement | null>(null);
-  const [isPlayingSoundprint, setIsPlayingSoundprint] = useState(false);
+  const playlistQueueRef = useRef<HTMLAudioElement[]>([]);
 
   useEffect(() => {
     localStorage.setItem('hearDiaryBase64Recordings', JSON.stringify(recordings));
@@ -92,30 +92,35 @@ const App = () => {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
+    if (mediaRecorderRef.current?.state !== 'inactive') mediaRecorderRef.current.stop();
+  };
+
+  const stopSoundprint = () => {
+    playlistQueueRef.current.forEach(audio => audio.pause());
+    playlistQueueRef.current = [];
+    setIsPlayingSoundprint(false);
   };
 
   const playSoundprint = () => {
     const todays = recordings.filter((r) => r.date === getDateString());
     if (!todays.length) return;
+    stopSoundprint();
+
     let current = 0;
-    const audio = new Audio(todays[current].dataUrl);
-    playlistRef.current = audio;
+    const queue: HTMLAudioElement[] = todays.map((rec) => new Audio(rec.dataUrl));
+    playlistQueueRef.current = queue;
     setIsPlayingSoundprint(true);
-    audio.onended = () => {
-      current++;
-      if (current < todays.length) {
-        const next = new Audio(todays[current].dataUrl);
-        playlistRef.current = next;
-        next.onended = audio.onended;
-        next.play();
+
+    const playNext = () => {
+      if (current < queue.length) {
+        queue[current].onended = playNext;
+        queue[current].play();
+        current++;
       } else {
         setIsPlayingSoundprint(false);
       }
     };
-    audio.play();
+    playNext();
   };
 
   const deleteRecording = (index: number) => setRecordings((prev) => prev.filter((_, i) => i !== index));
@@ -133,11 +138,14 @@ const App = () => {
     acc[rec.date].push(rec);
     return acc;
   }, {} as Record<string, Recording[]>);
-
   const sortedDates = Object.keys(grouped).sort((a, b) => (a < b ? 1 : -1));
 
+  useEffect(() => {
+    if (section !== 'soundprint') stopSoundprint();
+  }, [section]);
+
   return (
-    <div style={{ fontFamily: 'Arial', textAlign: 'center', background: darkMode ? '#111' : '#fff', color: darkMode ? '#eee' : '#222', minHeight: '100vh' }}>
+    <div style={{ fontFamily: 'Arial', textAlign: 'center', background: darkMode ? '#121212' : '#f9f9f9', color: darkMode ? '#eee' : '#111', minHeight: '100vh' }}>
       <button onClick={toggleTheme} style={{ position: 'absolute', top: 10, right: 16 }}>{darkMode ? '☀️' : '🌙'}</button>
       <img src={logo} alt="Logo" style={{ width: 56, margin: '1rem auto' }} />
 
@@ -148,11 +156,11 @@ const App = () => {
             value={recordingName}
             onChange={(e) => setRecordingName(e.target.value)}
             placeholder="Recording name..."
-            style={{ padding: 10, borderRadius: 10, border: '1px solid #ccc', width: '80%' }}
+            style={{ padding: 10, borderRadius: 10, border: '1px solid #ccc' }}
           />
           <div style={{ margin: '1rem' }}>
-            <button onClick={startRecording} disabled={isRecording} style={{ backgroundColor: '#4caf50', color: '#fff', borderRadius: 10, padding: '0.5rem 1rem', marginRight: 8 }}>Start</button>
-            <button onClick={stopRecording} disabled={!isRecording} style={{ backgroundColor: '#f44336', color: '#fff', borderRadius: 10, padding: '0.5rem 1rem' }}>Stop</button>
+            <button onClick={startRecording} disabled={isRecording} style={{ backgroundColor: '#43a047', color: 'white', padding: '0.5rem 1rem', borderRadius: 10, marginRight: 8 }}>Start</button>
+            <button onClick={stopRecording} disabled={!isRecording} style={{ backgroundColor: '#e53935', color: 'white', padding: '0.5rem 1rem', borderRadius: 10 }}>Stop</button>
           </div>
           {isRecording && <div>⏱ {formatTime(elapsedTime)}</div>}
         </div>
@@ -165,8 +173,8 @@ const App = () => {
             <div key={date} style={{ marginBottom: '1.5rem' }}>
               <h4>{date}</h4>
               {grouped[date].map((rec, i) => (
-                <div key={i} style={{ padding: '1rem', marginBottom: '1rem', borderRadius: 10, background: darkMode ? '#222' : '#f4f4f4' }}>
-                  <strong>{rec.name}</strong> ({rec.time}) – <span style={{ color: '#9c27b0' }}>{rec.emotion}</span> – Score: {rec.aiScore?.toFixed(2)}<br />
+                <div key={i} style={{ padding: '1rem', marginBottom: '1rem', borderRadius: 10, background: darkMode ? '#222' : '#eee' }}>
+                  <strong>{rec.name}</strong> ({rec.time}) – {rec.emotion || 'Neutral'} – Score: {rec.aiScore?.toFixed(2)}<br />
                   <audio controls src={rec.dataUrl} />
                   <textarea
                     value={rec.note || ''}
@@ -189,10 +197,9 @@ const App = () => {
         <div>
           <h2>Soundprint</h2>
           <button
-            onClick={playSoundprint}
-            disabled={isPlayingSoundprint}
-            style={{ backgroundColor: '#7e57c2', color: 'white', padding: '0.5rem 1rem', borderRadius: 10 }}>
-            ▶️ Play My Day
+            onClick={isPlayingSoundprint ? stopSoundprint : playSoundprint}
+            style={{ backgroundColor: '#5e35b1', color: 'white', padding: '0.5rem 1.2rem', borderRadius: 10 }}>
+            {isPlayingSoundprint ? '⏹ Stop' : '▶️ Play My Day'}
           </button>
         </div>
       )}
