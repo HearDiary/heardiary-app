@@ -1,4 +1,4 @@
-// main.tsx – HearDiary (vizuálne vylepšenie + štatistika)
+// main.tsx (kompletná verzia s opravou TS18047, grafikou a AI rozšíreniami)
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import logo from './assets/logo_icon_256.png';
@@ -22,6 +22,7 @@ const App = () => {
   const [recordingName, setRecordingName] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [darkMode, setDarkMode] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -91,9 +92,42 @@ const App = () => {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current?.state !== 'inactive') mediaRecorderRef.current.stop();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
   };
 
+  const playSoundprint = () => {
+    const todays = recordings.filter((r) => r.date === getDateString());
+    if (!todays.length) return;
+    let current = 0;
+    const audio = new Audio(todays[current].dataUrl);
+    playlistRef.current = audio;
+    setIsPlayingSoundprint(true);
+    audio.onended = () => {
+      current++;
+      if (current < todays.length) {
+        const next = new Audio(todays[current].dataUrl);
+        playlistRef.current = next;
+        next.onended = audio.onended;
+        next.play();
+      } else {
+        setIsPlayingSoundprint(false);
+      }
+    };
+    audio.play();
+  };
+
+  const deleteRecording = (index: number) => setRecordings((prev) => prev.filter((_, i) => i !== index));
+  const updateNote = (index: number, note: string) => {
+    setRecordings((prev) => {
+      const updated = [...prev];
+      updated[index].note = note;
+      return updated;
+    });
+  };
+
+  const toggleTheme = () => setDarkMode((prev) => !prev);
   const grouped = recordings.reduce((acc, rec) => {
     acc[rec.date] = acc[rec.date] || [];
     acc[rec.date].push(rec);
@@ -101,58 +135,49 @@ const App = () => {
   }, {} as Record<string, Recording[]>);
 
   const sortedDates = Object.keys(grouped).sort((a, b) => (a < b ? 1 : -1));
-  const today = getDateString();
-  const todayRecs = grouped[today] || [];
-  const emotionStats = todayRecs.reduce((acc, rec) => {
-    acc[rec.emotion || 'neutral'] = (acc[rec.emotion || 'neutral'] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
 
   return (
-    <div style={{ fontFamily: 'Segoe UI', background: '#f5f7fa', minHeight: '100vh', paddingBottom: '5rem' }}>
-      <div style={{ textAlign: 'center', padding: '1rem' }}>
-        <img src={logo} alt="HearDiary" style={{ height: 48 }} />
-        <h1 style={{ margin: '0.5rem 0', fontWeight: 600 }}>HearDiary</h1>
-      </div>
+    <div style={{ fontFamily: 'Arial', textAlign: 'center', background: darkMode ? '#111' : '#fff', color: darkMode ? '#eee' : '#222', minHeight: '100vh' }}>
+      <button onClick={toggleTheme} style={{ position: 'absolute', top: 10, right: 16 }}>{darkMode ? '☀️' : '🌙'}</button>
+      <img src={logo} alt="Logo" style={{ width: 56, margin: '1rem auto' }} />
 
       {section === 'record' && (
-        <div style={{ textAlign: 'center' }}>
-          <h2>🎙️ Record</h2>
+        <div>
+          <h2>Record</h2>
           <input
             value={recordingName}
             onChange={(e) => setRecordingName(e.target.value)}
             placeholder="Recording name..."
-            style={{ padding: '0.6rem 1rem', borderRadius: 10, width: '80%', marginBottom: '1rem' }}
+            style={{ padding: 10, borderRadius: 10, border: '1px solid #ccc', width: '80%' }}
           />
-          <div>
-            <button onClick={startRecording} disabled={isRecording} style={{ backgroundColor: '#43a047', color: 'white', padding: '0.6rem 1.4rem', borderRadius: 10, marginRight: 8 }}>Start</button>
-            <button onClick={stopRecording} disabled={!isRecording} style={{ backgroundColor: '#e53935', color: 'white', padding: '0.6rem 1.4rem', borderRadius: 10 }}>Stop</button>
+          <div style={{ margin: '1rem' }}>
+            <button onClick={startRecording} disabled={isRecording} style={{ backgroundColor: '#4caf50', color: '#fff', borderRadius: 10, padding: '0.5rem 1rem', marginRight: 8 }}>Start</button>
+            <button onClick={stopRecording} disabled={!isRecording} style={{ backgroundColor: '#f44336', color: '#fff', borderRadius: 10, padding: '0.5rem 1rem' }}>Stop</button>
           </div>
-          {isRecording && <div style={{ marginTop: '1rem' }}>⏱ {formatTime(elapsedTime)}</div>}
+          {isRecording && <div>⏱ {formatTime(elapsedTime)}</div>}
         </div>
       )}
 
       {section === 'diary' && (
-        <div style={{ padding: '1rem' }}>
-          <h2>📁 Diary</h2>
+        <div>
+          <h2>Diary</h2>
           {sortedDates.map(date => (
             <div key={date} style={{ marginBottom: '1.5rem' }}>
               <h4>{date}</h4>
               {grouped[date].map((rec, i) => (
-                <div key={i} style={{ background: 'white', borderRadius: 12, padding: '1rem', boxShadow: '0 2px 6px rgba(0,0,0,0.1)', marginBottom: '1rem' }}>
-                  <strong>{rec.name}</strong> ({rec.time}) <br />
-                  <span style={{ color: '#555' }}>{rec.emotion} – Score: {rec.aiScore?.toFixed(2)}</span>
-                  <audio controls src={rec.dataUrl} style={{ marginTop: '0.5rem', width: '100%' }} />
+                <div key={i} style={{ padding: '1rem', marginBottom: '1rem', borderRadius: 10, background: darkMode ? '#222' : '#f4f4f4' }}>
+                  <strong>{rec.name}</strong> ({rec.time}) – <span style={{ color: '#9c27b0' }}>{rec.emotion}</span> – Score: {rec.aiScore?.toFixed(2)}<br />
+                  <audio controls src={rec.dataUrl} />
                   <textarea
                     value={rec.note || ''}
-                    onChange={(e) => {
-                      const updated = [...recordings];
-                      updated[recordings.indexOf(rec)].note = e.target.value;
-                      setRecordings(updated);
-                    }}
+                    onChange={(e) => updateNote(recordings.indexOf(rec), e.target.value)}
                     placeholder="Add note..."
-                    style={{ width: '100%', padding: '0.5rem', borderRadius: 8, marginTop: 8 }}
+                    style={{ marginTop: '0.3rem', padding: '0.4rem', borderRadius: 8, width: '90%' }}
                   />
+                  <div>
+                    <a href={rec.dataUrl} download={rec.name + '.wav'} style={{ color: '#2196f3', marginRight: '1rem' }}>Download</a>
+                    <button onClick={() => deleteRecording(recordings.indexOf(rec))} style={{ color: '#999' }}>Delete</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -161,38 +186,21 @@ const App = () => {
       )}
 
       {section === 'soundprint' && (
-        <div style={{ textAlign: 'center', padding: '1rem' }}>
-          <h2>🎧 Soundprint</h2>
-          <p style={{ fontSize: 14, color: '#555' }}>Today: {todayRecs.length} recordings</p>
-          <div style={{ fontSize: 12, color: '#777', marginBottom: '1rem' }}>
-            {Object.entries(emotionStats).map(([emotion, count]) => (
-              <span key={emotion} style={{ marginRight: 8 }}>{emotion}: {count}</span>
-            ))}
-          </div>
+        <div>
+          <h2>Soundprint</h2>
           <button
-            onClick={() => {
-              let index = 0;
-              const audios = todayRecs.map(r => new Audio(r.dataUrl));
-              const playNext = () => {
-                if (index < audios.length) {
-                  audios[index].onended = playNext;
-                  audios[index].play();
-                  index++;
-                }
-              };
-              playNext();
-            }}
-            disabled={!todayRecs.length || isPlayingSoundprint}
-            style={{ background: '#673ab7', color: '#fff', borderRadius: 12, padding: '0.6rem 1.6rem', fontSize: 16 }}>
+            onClick={playSoundprint}
+            disabled={isPlayingSoundprint}
+            style={{ backgroundColor: '#7e57c2', color: 'white', padding: '0.5rem 1rem', borderRadius: 10 }}>
             ▶️ Play My Day
           </button>
         </div>
       )}
 
-      <nav style={{ position: 'fixed', bottom: 0, width: '100%', display: 'flex', justifyContent: 'space-around', background: '#fff', borderTop: '1px solid #ddd', padding: '0.6rem 0' }}>
-        <button onClick={() => setSection('record')} style={{ background: 'none', border: 'none', fontSize: 20 }}>{section === 'record' ? '🎙️' : '🎙'}</button>
-        <button onClick={() => setSection('diary')} style={{ background: 'none', border: 'none', fontSize: 20 }}>{section === 'diary' ? '📁' : '📂'}</button>
-        <button onClick={() => setSection('soundprint')} style={{ background: 'none', border: 'none', fontSize: 20 }}>{section === 'soundprint' ? '🎧' : '🎵'}</button>
+      <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, display: 'flex', justifyContent: 'space-around', background: darkMode ? '#000' : '#fff', borderTop: '1px solid #ccc', padding: '0.5rem 0' }}>
+        <button onClick={() => setSection('record')} style={{ background: 'none', border: 'none' }}>{section === 'record' ? '🎙️' : '🎙'}</button>
+        <button onClick={() => setSection('diary')} style={{ background: 'none', border: 'none' }}>{section === 'diary' ? '📁' : '📂'}</button>
+        <button onClick={() => setSection('soundprint')} style={{ background: 'none', border: 'none' }}>{section === 'soundprint' ? '🎧' : '🎵'}</button>
       </nav>
     </div>
   );
