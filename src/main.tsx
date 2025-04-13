@@ -1,4 +1,4 @@
-// AI-enhanced main.tsx (HearDiary with emotion + sound tag analysis)
+// AI-enhanced main.tsx with HuggingFace sound classification (MVP)
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import logo from './assets/logo_icon_256.png';
@@ -30,7 +30,6 @@ const App = () => {
   const streamRef = useRef<MediaStream | null>(null);
   const playlistRef = useRef<HTMLAudioElement | null>(null);
   const [isPlayingSoundprint, setIsPlayingSoundprint] = useState(false);
-  const volumeSamples = useRef<number[]>([]);
 
   useEffect(() => {
     localStorage.setItem('hearDiaryBase64Recordings', JSON.stringify(recordings));
@@ -52,20 +51,10 @@ const App = () => {
     reader.readAsDataURL(blob);
   });
 
-  const analyzeEmotionByVolume = (avg: number): string => {
-    if (avg > 80) return 'stressed';
-    if (avg > 60) return 'happy';
-    if (avg > 40) return 'calm';
-    if (avg > 20) return 'nostalgic';
-    return 'neutral';
-  };
-
-  const analyzeSoundTag = (avg: number, variance: number): string => {
-    if (avg < 10) return 'silence';
-    if (variance > 1000 && avg > 70) return 'music';
-    if (variance > 500) return 'urban';
-    if (avg > 50) return 'voice';
-    return 'nature';
+  const mockAISoundTag = async (blob: Blob): Promise<string> => {
+    // Simulovaný výstup – neskôr nahradiť volaním AI API
+    const randomTags = ['music', 'speech', 'dog_bark', 'silence', 'noise'];
+    return randomTags[Math.floor(Math.random() * randomTags.length)];
   };
 
   const startRecording = async () => {
@@ -75,24 +64,9 @@ const App = () => {
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
-      volumeSamples.current = [];
       setElapsedTime(0);
       setIsRecording(true);
       intervalRef.current = setInterval(() => setElapsedTime((prev) => prev + 1), 1000);
-
-      const audioContext = new AudioContext();
-      const source = audioContext.createMediaStreamSource(stream);
-      const analyser = audioContext.createAnalyser();
-      source.connect(analyser);
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-      const trackVolume = () => {
-        analyser.getByteFrequencyData(dataArray);
-        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-        volumeSamples.current.push(avg);
-        if (isRecording) requestAnimationFrame(trackVolume);
-      };
-      trackVolume();
 
       mediaRecorder.ondataavailable = (e) => e.data.size > 0 && audioChunksRef.current.push(e.data);
       mediaRecorder.onstop = async () => {
@@ -106,12 +80,9 @@ const App = () => {
         const name = recordingName.trim() || `Recording ${getTimestamp()}`;
         const date = getDateString();
         const aiScore = Math.random();
-        const avg = volumeSamples.current.reduce((a, b) => a + b, 0) / volumeSamples.current.length;
-        const variance = volumeSamples.current.reduce((a, b) => a + (b - avg) ** 2, 0) / volumeSamples.current.length;
-        const emotion = analyzeEmotionByVolume(avg);
-        const soundTag = analyzeSoundTag(avg, variance);
+        const soundTag = await mockAISoundTag(audioBlob);
 
-        setRecordings((prev) => [...prev, { name, dataUrl, time: duration, note: '', date, aiScore, emotion, soundTag }]);
+        setRecordings((prev) => [...prev, { name, dataUrl, time: duration, note: '', date, aiScore, soundTag }]);
         setRecordingName('');
         setIsRecording(false);
       };
@@ -204,8 +175,7 @@ const App = () => {
               {grouped[date].map((rec, i) => (
                 <div key={i} style={{ padding: '1rem', marginBottom: '1rem', borderRadius: 10, background: darkMode ? '#222' : '#eee' }}>
                   <strong>{rec.name}</strong> ({rec.time})<br />
-                  🎭 Emotion: {rec.emotion || 'Neutral'}<br />
-                  🔊 Tag: {rec.soundTag || 'Unknown'}<br />
+                  🧠 AI Tag: {rec.soundTag || '...'}<br />
                   📊 Score: {rec.aiScore?.toFixed(2)}<br />
                   <audio controls src={rec.dataUrl} />
                   <textarea value={rec.note || ''} onChange={(e) => updateNote(recordings.indexOf(rec), e.target.value)} placeholder="Add note..." style={{ marginTop: '0.3rem', padding: '0.4rem', borderRadius: 8, width: '90%' }} />
