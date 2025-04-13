@@ -1,4 +1,3 @@
-// AI-enhanced main.tsx (HearDiary – improved playback handling and UI polish)
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import logo from './assets/logo_icon_256.png';
@@ -29,17 +28,15 @@ const App = () => {
   const streamRef = useRef<MediaStream | null>(null);
   const playlistRef = useRef<HTMLAudioElement | null>(null);
   const [isPlayingSoundprint, setIsPlayingSoundprint] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('hearDiaryBase64Recordings', JSON.stringify(recordings));
   }, [recordings]);
 
   useEffect(() => {
-    if (section !== 'soundprint' && playlistRef.current) {
-      playlistRef.current.pause();
-      setIsPlayingSoundprint(false);
-    }
+    return () => {
+      if (playlistRef.current) playlistRef.current.pause();
+    };
   }, [section]);
 
   const formatTime = (seconds: number) => {
@@ -100,16 +97,28 @@ const App = () => {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current?.state !== 'inactive') mediaRecorderRef.current.stop();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const stopPlayback = () => {
+    if (playlistRef.current) {
+      playlistRef.current.pause();
+      playlistRef.current = null;
+      setIsPlayingSoundprint(false);
+    }
   };
 
   const playSoundprint = () => {
+    stopPlayback();
     const todays = recordings.filter((r) => r.date === getDateString());
     if (!todays.length) return;
     let current = 0;
     const audio = new Audio(todays[current].dataUrl);
     playlistRef.current = audio;
     setIsPlayingSoundprint(true);
+
     audio.onended = () => {
       current++;
       if (current < todays.length) {
@@ -122,30 +131,6 @@ const App = () => {
       }
     };
     audio.play();
-  };
-
-  const pauseSoundprint = () => {
-    if (playlistRef.current) {
-      playlistRef.current.pause();
-      setIsPaused(true);
-    }
-  };
-
-  const resumeSoundprint = () => {
-    if (playlistRef.current) {
-      playlistRef.current.play();
-      setIsPaused(false);
-    }
-  };
-
-  const stopSoundprint = () => {
-    if (playlistRef.current) {
-      playlistRef.current.pause();
-      playlistRef.current.currentTime = 0;
-      playlistRef.current = null;
-      setIsPlayingSoundprint(false);
-      setIsPaused(false);
-    }
   };
 
   const deleteRecording = (index: number) => setRecordings((prev) => prev.filter((_, i) => i !== index));
@@ -217,18 +202,18 @@ const App = () => {
       {section === 'soundprint' && (
         <div>
           <h2>Soundprint</h2>
-          {!isPlayingSoundprint ? (
+          <button
+            onClick={playSoundprint}
+            disabled={isPlayingSoundprint}
+            style={{ backgroundColor: '#5e35b1', color: 'white', padding: '0.5rem 1.2rem', borderRadius: 10, marginBottom: 8 }}>
+            ▶️ Play My Day
+          </button>
+          {isPlayingSoundprint && (
             <button
-              onClick={playSoundprint}
-              style={{ backgroundColor: '#5e35b1', color: 'white', padding: '0.5rem 1.2rem', borderRadius: 10 }}>
-              ▶️ Play My Day
+              onClick={stopPlayback}
+              style={{ backgroundColor: '#f44336', color: 'white', padding: '0.4rem 1rem', borderRadius: 10 }}>
+              ⏹ Stop
             </button>
-          ) : (
-            <>
-              <button onClick={pauseSoundprint} disabled={isPaused} style={{ marginRight: 8 }}>⏸ Pause</button>
-              <button onClick={resumeSoundprint} disabled={!isPaused} style={{ marginRight: 8 }}>▶️ Resume</button>
-              <button onClick={stopSoundprint} style={{ backgroundColor: '#f44336', color: 'white' }}>⏹ Stop</button>
-            </>
           )}
         </div>
       )}
