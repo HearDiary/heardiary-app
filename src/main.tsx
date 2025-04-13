@@ -1,4 +1,4 @@
-// AI-enhanced main.tsx (HearDiary - extended with soundprint generation and styled UI)
+// main.tsx – kompletná verzia s opravou chyby a novou funkciou: vizuálne farebné tagy emócií
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import logo from './assets/logo_icon_256.png';
@@ -12,6 +12,14 @@ interface Recording {
   aiScore?: number;
   emotion?: string;
 }
+
+const emotionColors: Record<string, string> = {
+  calm: '#81c784',
+  happy: '#fff176',
+  nostalgic: '#ba68c8',
+  stressed: '#e57373',
+  neutral: '#90a4ae'
+};
 
 const App = () => {
   const [section, setSection] = useState<'record' | 'diary' | 'soundprint'>('record');
@@ -92,7 +100,9 @@ const App = () => {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current?.state !== 'inactive') mediaRecorderRef.current.stop();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
   };
 
   const playSoundprint = () => {
@@ -134,47 +144,46 @@ const App = () => {
   const sortedDates = Object.keys(grouped).sort((a, b) => (a < b ? 1 : -1));
 
   return (
-    <div style={{ fontFamily: 'Arial', textAlign: 'center', background: darkMode ? '#121212' : '#f9f9f9', color: darkMode ? '#eee' : '#111', minHeight: '100vh', paddingBottom: '4rem' }}>
+    <div style={{ fontFamily: 'Arial', textAlign: 'center', background: darkMode ? '#121212' : '#f9f9f9', color: darkMode ? '#eee' : '#111', minHeight: '100vh' }}>
       <button onClick={toggleTheme} style={{ position: 'absolute', top: 10, right: 16 }}>{darkMode ? '☀️' : '🌙'}</button>
-      <img src={logo} alt="Logo" style={{ width: 64, margin: '1rem auto' }} />
+      <img src={logo} alt="Logo" style={{ width: 56, margin: '1rem auto' }} />
 
       {section === 'record' && (
         <div>
-          <h2 style={{ fontSize: '1.8rem', marginBottom: '1rem' }}>Record</h2>
+          <h2>Record</h2>
           <input
             value={recordingName}
             onChange={(e) => setRecordingName(e.target.value)}
             placeholder="Recording name..."
-            style={{ padding: 12, borderRadius: 12, border: '1px solid #ccc', width: '80%', maxWidth: 300 }}
+            style={{ padding: 10, borderRadius: 10, border: '1px solid #ccc' }}
           />
           <div style={{ margin: '1rem' }}>
-            <button onClick={startRecording} disabled={isRecording} style={{ backgroundColor: '#43a047', color: 'white', padding: '0.7rem 1.5rem', borderRadius: 12, marginRight: 8 }}>Start</button>
-            <button onClick={stopRecording} disabled={!isRecording} style={{ backgroundColor: '#e53935', color: 'white', padding: '0.7rem 1.5rem', borderRadius: 12 }}>Stop</button>
+            <button onClick={startRecording} disabled={isRecording} style={{ backgroundColor: '#43a047', color: 'white', padding: '0.5rem 1rem', borderRadius: 10, marginRight: 8 }}>Start</button>
+            <button onClick={stopRecording} disabled={!isRecording} style={{ backgroundColor: '#e53935', color: 'white', padding: '0.5rem 1rem', borderRadius: 10 }}>Stop</button>
           </div>
-          {isRecording && <div style={{ fontSize: '1.2rem', marginTop: '1rem' }}>⏱ {formatTime(elapsedTime)}</div>}
+          {isRecording && <div>⏱ {formatTime(elapsedTime)}</div>}
         </div>
       )}
 
       {section === 'diary' && (
         <div>
-          <h2 style={{ fontSize: '1.8rem', margin: '1rem 0' }}>Diary</h2>
+          <h2>Diary</h2>
           {sortedDates.map(date => (
             <div key={date} style={{ marginBottom: '1.5rem' }}>
-              <h4 style={{ marginBottom: 8 }}>{date}</h4>
+              <h4>{date}</h4>
               {grouped[date].map((rec, i) => (
-                <div key={i} style={{ padding: '1rem', margin: '0 auto 1rem', borderRadius: 12, background: darkMode ? '#222' : '#eee', width: '90%', maxWidth: 420 }}>
-                  <strong>{rec.name}</strong> ({rec.time})<br />
-                  {rec.emotion && <span style={{ fontSize: '0.9rem', color: '#999' }}>Mood: {rec.emotion} | Score: {rec.aiScore?.toFixed(2)}</span>}<br />
-                  <audio controls src={rec.dataUrl} style={{ marginTop: 8, width: '100%' }} />
+                <div key={i} style={{ padding: '1rem', marginBottom: '1rem', borderRadius: 10, background: darkMode ? '#222' : '#eee' }}>
+                  <strong>{rec.name}</strong> ({rec.time}) – <span style={{ color: emotionColors[rec.emotion || 'neutral'] }}>{rec.emotion || 'Neutral'}</span> – Score: {rec.aiScore?.toFixed(2)}<br />
+                  <audio controls src={rec.dataUrl} />
                   <textarea
                     value={rec.note || ''}
                     onChange={(e) => updateNote(recordings.indexOf(rec), e.target.value)}
                     placeholder="Add note..."
-                    style={{ marginTop: '0.5rem', padding: '0.5rem', borderRadius: 8, width: '100%' }}
+                    style={{ marginTop: '0.3rem', padding: '0.4rem', borderRadius: 8, width: '90%' }}
                   />
-                  <div style={{ marginTop: 8 }}>
+                  <div>
                     <a href={rec.dataUrl} download={rec.name + '.wav'} style={{ color: '#2196f3', marginRight: '1rem' }}>Download</a>
-                    <button onClick={() => deleteRecording(recordings.indexOf(rec))} style={{ color: '#999', border: 'none', background: 'transparent' }}>Delete</button>
+                    <button onClick={() => deleteRecording(recordings.indexOf(rec))} style={{ color: '#999' }}>Delete</button>
                   </div>
                 </div>
               ))}
@@ -185,20 +194,20 @@ const App = () => {
 
       {section === 'soundprint' && (
         <div>
-          <h2 style={{ fontSize: '1.8rem', margin: '1rem 0' }}>Soundprint</h2>
+          <h2>Soundprint</h2>
           <button
             onClick={playSoundprint}
             disabled={isPlayingSoundprint}
-            style={{ backgroundColor: '#5e35b1', color: 'white', padding: '0.7rem 1.5rem', borderRadius: 12 }}>
+            style={{ backgroundColor: '#5e35b1', color: 'white', padding: '0.5rem 1.2rem', borderRadius: 10 }}>
             ▶️ Play My Day
           </button>
         </div>
       )}
 
-      <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, display: 'flex', justifyContent: 'space-around', background: darkMode ? '#000' : '#fff', borderTop: '1px solid #ccc', padding: '0.6rem 0' }}>
-        <button onClick={() => setSection('record')} style={{ background: 'none', border: 'none', fontSize: '1.4rem' }}>{section === 'record' ? '🎙️' : '🎙'}</button>
-        <button onClick={() => setSection('diary')} style={{ background: 'none', border: 'none', fontSize: '1.4rem' }}>{section === 'diary' ? '📁' : '📂'}</button>
-        <button onClick={() => setSection('soundprint')} style={{ background: 'none', border: 'none', fontSize: '1.4rem' }}>{section === 'soundprint' ? '🎧' : '🎵'}</button>
+      <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, display: 'flex', justifyContent: 'space-around', background: darkMode ? '#000' : '#fff', borderTop: '1px solid #ccc', padding: '0.5rem 0' }}>
+        <button onClick={() => setSection('record')} style={{ background: 'none', border: 'none' }}>{section === 'record' ? '🎙️' : '🎙'}</button>
+        <button onClick={() => setSection('diary')} style={{ background: 'none', border: 'none' }}>{section === 'diary' ? '📁' : '📂'}</button>
+        <button onClick={() => setSection('soundprint')} style={{ background: 'none', border: 'none' }}>{section === 'soundprint' ? '🎧' : '🎵'}</button>
       </nav>
     </div>
   );
