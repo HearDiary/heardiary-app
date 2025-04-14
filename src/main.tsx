@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+// main.tsx (v1.2) – HearDiary s elegantným dizajnom a výraznými farbami
+import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import logo from './assets/logo_icon_256.png';
@@ -23,26 +24,18 @@ const App = () => {
   const [recordingName, setRecordingName] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
-  const [pinVerified, setPinVerified] = useState(false);
-  const [pinInput, setPinInput] = useState('');
-
+  const [darkMode, setDarkMode] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const playlistRef = useRef<HTMLAudioElement | null>(null);
   const [isPlayingSoundprint, setIsPlayingSoundprint] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
+    document.body.className = darkMode ? 'dark' : 'light';
     localStorage.setItem('hearDiaryBase64Recordings', JSON.stringify(recordings));
-  }, [recordings]);
-
-  useEffect(() => {
-    document.body.dataset.theme = darkMode ? 'dark' : 'light';
-    localStorage.setItem('theme', darkMode ? 'dark' : 'light');
-  }, [darkMode]);
+  }, [darkMode, recordings]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -110,8 +103,8 @@ const App = () => {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current?.state !== 'inactive') {
-      mediaRecorderRef.current?.stop();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
     }
   };
 
@@ -124,16 +117,16 @@ const App = () => {
   };
 
   const playSoundprint = () => {
-    const filtered = recordings.filter((r) => r.date === selectedDate);
-    if (!filtered.length) return;
+    const todays = recordings.filter((r) => r.date === getDateString());
+    if (!todays.length) return;
     let current = 0;
-    const audio = new Audio(filtered[current].dataUrl);
+    const audio = new Audio(todays[current].dataUrl);
     playlistRef.current = audio;
     setIsPlayingSoundprint(true);
     audio.onended = () => {
       current++;
-      if (current < filtered.length) {
-        const next = new Audio(filtered[current].dataUrl);
+      if (current < todays.length) {
+        const next = new Audio(todays[current].dataUrl);
         playlistRef.current = next;
         next.onended = audio.onended;
         next.play();
@@ -162,32 +155,20 @@ const App = () => {
     }
   };
 
-  if (!pinVerified) {
-    return (
-      <div className="centered">
-        <h2>Enter your PIN</h2>
-        <input type="password" value={pinInput} onChange={(e) => setPinInput(e.target.value)} />
-        <button onClick={() => pinInput === '1234' && setPinVerified(true)}>Submit</button>
-      </div>
-    );
-  }
-
   return (
-    <div className="app">
+    <div className="container">
       <header>
-        <img src={logo} alt="logo" className="logo" />
-        <h1>HearDiary</h1>
-        <label className="switch">
-          <input type="checkbox" checked={darkMode} onChange={() => setDarkMode(!darkMode)} />
-          <span className="slider round"></span>
-        </label>
+        <img src={logo} alt="logo" />
+        <span className="toggle-theme" onClick={() => setDarkMode(!darkMode)}>{darkMode ? '☀️' : '🌙'}</span>
       </header>
+
+      <h2>HearDiary</h2>
 
       {section === 'record' && (
         <section>
           <input value={recordingName} onChange={e => setRecordingName(e.target.value)} placeholder="Recording name..." />
-          <button onClick={startRecording} disabled={isRecording}>Start</button>
-          <button onClick={stopRecording} disabled={!isRecording}>Stop</button>
+          <button className="start" onClick={startRecording} disabled={isRecording}>Start</button>
+          <button className="stop" onClick={stopRecording} disabled={!isRecording}>Stop</button>
           {isRecording && <div>⏱ {formatTime(elapsedTime)}</div>}
         </section>
       )}
@@ -196,14 +177,14 @@ const App = () => {
         <section>
           {Object.keys(grouped).sort((a, b) => b.localeCompare(a)).map(date => (
             <div key={date}>
-              <h3>{date}</h3>
+              <h4>{date}</h4>
               {grouped[date].map((r, i) => (
-                <div key={i} className="recording-card">
-                  <strong>{getTagIcon(r.tag)} {r.name}</strong> ({r.time}) – {r.emotion ?? '...'} – Score: {r.aiScore?.toFixed(2)}<br />
-                  <audio controls src={r.dataUrl} />
-                  <div>
-                    <a href={r.dataUrl} download={`${r.name}.wav`}>Download</a>
-                    <button onClick={() => setRecordings(prev => prev.filter(rec => rec !== r))}>Delete</button>
+                <div className="recording-card" key={i}>
+                  <strong>{getTagIcon(r.tag)} {r.name}</strong> ({r.time})<br />
+                  <audio controls src={r.dataUrl} className="audio-controls" />
+                  <div className="audio-actions">
+                    <a href={r.dataUrl} download={r.name + '.wav'}><button className="download">Download</button></a>
+                    <button className="delete" onClick={() => setRecordings(rec => rec.filter((_, idx) => idx !== recordings.indexOf(r)))}>Delete</button>
                   </div>
                 </div>
               ))}
@@ -214,8 +195,7 @@ const App = () => {
 
       {section === 'soundprint' && (
         <section>
-          <h2>Soundprint</h2>
-          <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
+          <h3>Soundprint</h3>
           {isPlayingSoundprint ? (
             <button onClick={stopSoundprint}>⏹ Stop</button>
           ) : (
@@ -224,11 +204,11 @@ const App = () => {
         </section>
       )}
 
-      <footer>
-        <button onClick={() => { stopSoundprint(); setSection('record'); }}>🎙</button>
-        <button onClick={() => { stopSoundprint(); setSection('diary'); }}>📁</button>
-        <button onClick={() => setSection('soundprint')}>🎧</button>
-      </footer>
+      <nav>
+        <button className="nav" onClick={() => { stopSoundprint(); setSection('record'); }}>🎙</button>
+        <button className="nav" onClick={() => { stopSoundprint(); setSection('diary'); }}>📁</button>
+        <button className="nav" onClick={() => setSection('soundprint')}>🎧</button>
+      </nav>
     </div>
   );
 };
