@@ -106,7 +106,7 @@ const App = () => {
 
   const stopRecording = () => {
     if (mediaRecorderRef.current?.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current?.stop();
     }
   };
 
