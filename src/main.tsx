@@ -23,17 +23,23 @@ const App = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [darkMode, setDarkMode] = useState(false);
+  const [isPlayingSoundprint, setIsPlayingSoundprint] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>('');
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const playlistRef = useRef<HTMLAudioElement | null>(null);
-  const [isPlayingSoundprint, setIsPlayingSoundprint] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
     localStorage.setItem('hearDiaryBase64Recordings', JSON.stringify(recordings));
   }, [recordings]);
+
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+    setSelectedDate(today);
+  }, []);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -94,6 +100,7 @@ const App = () => {
         setRecordingName('');
         setIsRecording(false);
       };
+
       mediaRecorder.start();
     } catch (err) {
       console.error(err);
@@ -101,7 +108,7 @@ const App = () => {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current?.state !== 'inactive') {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
   };
@@ -115,31 +122,34 @@ const App = () => {
   };
 
   const playSoundprint = () => {
-    const selected = recordings.filter((r) => r.date === selectedDate);
-    if (!selected.length) return;
+    const day = selectedDate || getDateString();
+    const filtered = recordings.filter(r => r.date === day);
+    if (!filtered.length) return;
+
     let current = 0;
-    const audio = new Audio(selected[current].dataUrl);
+    const audio = new Audio(filtered[current].dataUrl);
     playlistRef.current = audio;
     setIsPlayingSoundprint(true);
-    audio.onended = () => {
+
+    const playNext = () => {
       current++;
-      if (current < selected.length) {
-        const next = new Audio(selected[current].dataUrl);
+      if (current < filtered.length) {
+        const next = new Audio(filtered[current].dataUrl);
         playlistRef.current = next;
-        next.onended = audio.onended;
+        next.onended = playNext;
         next.play();
       } else {
         setIsPlayingSoundprint(false);
       }
     };
+
+    audio.onended = playNext;
     audio.play();
   };
 
-  const grouped = recordings.reduce((acc, r) => {
-    acc[r.date] = acc[r.date] || [];
-    acc[r.date].push(r);
-    return acc;
-  }, {} as Record<string, Recording[]>);
+  const deleteRecording = (index: number) => {
+    setRecordings((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const getTagIcon = (tag?: string) => {
     switch (tag) {
@@ -153,23 +163,21 @@ const App = () => {
     }
   };
 
-  const deleteRecording = (index: number, date: string) => {
-    setRecordings((prev) => {
-      const updated = [...prev];
-      const idx = updated.findIndex((r) => r.date === date && updated.indexOf(r) === index);
-      if (idx !== -1) updated.splice(idx, 1);
-      return updated;
-    });
-  };
+  const grouped = recordings.reduce((acc, r) => {
+    acc[r.date] = acc[r.date] || [];
+    acc[r.date].push(r);
+    return acc;
+  }, {} as Record<string, Recording[]>);
 
   return (
     <div>
-      <img src={logo} alt="logo" width={40} />
-      <h2>HearDiary</h2>
+      <img src={logo} alt="logo" width={40} style={{ margin: '10px auto', display: 'block' }} />
+      <h2 style={{ textAlign: 'center' }}>HearDiary</h2>
 
       {section === 'record' && (
-        <div>
+        <div style={{ textAlign: 'center' }}>
           <input value={recordingName} onChange={e => setRecordingName(e.target.value)} placeholder="Recording name..." />
+          <br /><br />
           <button onClick={startRecording} disabled={isRecording}>Start</button>
           <button onClick={stopRecording} disabled={!isRecording}>Stop</button>
           {isRecording && <div>⏱ {formatTime(elapsedTime)}</div>}
@@ -186,8 +194,8 @@ const App = () => {
                   <strong>{getTagIcon(r.tag)} {r.name}</strong> ({r.time})<br />
                   <audio controls src={r.dataUrl} />
                   <div>
-                    <a href={r.dataUrl} download={`${r.name}.wav`}>Download</a>
-                    <button onClick={() => deleteRecording(i, date)}>Delete</button>
+                    <a href={r.dataUrl} download={`hear_${r.name}.wav`}>Download</a>
+                    <button onClick={() => deleteRecording(recordings.indexOf(r))}>Delete</button>
                   </div>
                 </div>
               ))}
@@ -197,13 +205,14 @@ const App = () => {
       )}
 
       {section === 'soundprint' && (
-        <div>
+        <div style={{ textAlign: 'center' }}>
           <h3>Soundprint</h3>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-          />
+          <select value={selectedDate} onChange={e => setSelectedDate(e.target.value)}>
+            {Object.keys(grouped).sort((a, b) => b.localeCompare(a)).map(date => (
+              <option key={date} value={date}>{date}</option>
+            ))}
+          </select>
+          <br />
           {isPlayingSoundprint ? (
             <button onClick={stopSoundprint}>⏹ Stop</button>
           ) : (
@@ -212,10 +221,10 @@ const App = () => {
         </div>
       )}
 
-      <nav>
+      <nav style={{ marginTop: '20px', textAlign: 'center' }}>
         <button onClick={() => { stopSoundprint(); setSection('record'); }}>🎙</button>
         <button onClick={() => { stopSoundprint(); setSection('diary'); }}>📁</button>
-        <button onClick={() => setSection('soundprint')}>🎧</button>
+        <button onClick={() => { stopSoundprint(); setSection('soundprint'); }}>🎧</button>
       </nav>
     </div>
   );
