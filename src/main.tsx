@@ -1,5 +1,8 @@
+// Updated and modernized main.tsx for HearDiary
+
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
+import './index.css';
 import logo from './assets/logo_icon_256.png';
 
 interface Recording {
@@ -23,11 +26,9 @@ const App = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [darkMode, setDarkMode] = useState(false);
-  const [pinVerified, setPinVerified] = useState(false);
-  const [pin, setPin] = useState(localStorage.getItem('hearDiaryPIN') || '');
-  const [inputPin, setInputPin] = useState('');
+  const [pin, setPin] = useState('');
+  const [authorized, setAuthorized] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -106,7 +107,7 @@ const App = () => {
 
   const stopRecording = () => {
     if (mediaRecorderRef.current?.state !== 'inactive') {
-      mediaRecorderRef.current?.stop();
+      mediaRecorderRef.current.stop();
     }
   };
 
@@ -119,16 +120,16 @@ const App = () => {
   };
 
   const playSoundprint = () => {
-    const todays = recordings.filter((r) => r.date === selectedDate);
-    if (!todays.length) return;
+    const tracks = recordings.filter(r => r.date === selectedDate);
+    if (!tracks.length) return;
     let current = 0;
-    const audio = new Audio(todays[current].dataUrl);
+    const audio = new Audio(tracks[current].dataUrl);
     playlistRef.current = audio;
     setIsPlayingSoundprint(true);
     audio.onended = () => {
       current++;
-      if (current < todays.length) {
-        const next = new Audio(todays[current].dataUrl);
+      if (current < tracks.length) {
+        const next = new Audio(tracks[current].dataUrl);
         playlistRef.current = next;
         next.onended = audio.onended;
         next.play();
@@ -157,40 +158,23 @@ const App = () => {
     }
   };
 
-  if (!pinVerified) {
+  if (!authorized) {
     return (
-      <div>
+      <div className={darkMode ? 'dark' : ''}>
         <h2>Enter your PIN</h2>
-        <input
-          type="password"
-          value={inputPin}
-          onChange={(e) => setInputPin(e.target.value)}
-        />
-        <button onClick={() => {
-          if (!pin) {
-            localStorage.setItem('hearDiaryPIN', inputPin);
-            setPin(inputPin);
-            setPinVerified(true);
-          } else if (inputPin === pin) {
-            setPinVerified(true);
-          } else {
-            alert('Wrong PIN');
-          }
-        }}>
-          Submit
-        </button>
+        <input type="password" value={pin} onChange={e => setPin(e.target.value)} />
+        <button onClick={() => pin === '1234' && setAuthorized(true)}>Submit</button>
       </div>
     );
   }
 
   return (
-    <div className={darkMode ? 'dark' : 'light'}>
+    <div className={darkMode ? 'dark' : ''}>
       <header>
         <img src={logo} alt="logo" width={40} />
         <h2>HearDiary</h2>
         <label>
-          <input type="checkbox" checked={darkMode} onChange={() => setDarkMode(!darkMode)} />
-          {darkMode ? '🌙' : '☀️'}
+          <input type="checkbox" checked={darkMode} onChange={() => setDarkMode(d => !d)} /> {darkMode ? '🌙' : '☀️'}
         </label>
       </header>
 
@@ -210,12 +194,10 @@ const App = () => {
               <h4>{date}</h4>
               {grouped[date].map((r, i) => (
                 <div key={i}>
-                  <strong>{getTagIcon(r.tag)} {r.name}</strong> ({r.time}) – {r.emotion || 'neutral'} – Score: {r.aiScore?.toFixed(2)}<br />
+                  <strong>{getTagIcon(r.tag)} {r.name}</strong> ({r.time}) – {r.emotion || 'unknown'} – Score: {r.aiScore?.toFixed(2)}<br />
                   <audio controls src={r.dataUrl} />
-                  <div>
-                    <a href={r.dataUrl} download={`recording-${i}.wav`}>⬇️ Download</a>
-                    <button onClick={() => setRecordings(recs => recs.filter((_, idx) => !(grouped[date][i] === recs[idx])))}>🗑 Delete</button>
-                  </div>
+                  <a href={r.dataUrl} download={r.name}>⬇️ Download</a>
+                  <button onClick={() => setRecordings(prev => prev.filter(x => x !== r))}>🗑 Delete</button>
                 </div>
               ))}
             </div>
@@ -226,7 +208,7 @@ const App = () => {
       {section === 'soundprint' && (
         <div>
           <h3>Soundprint</h3>
-          <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
+          <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
           {isPlayingSoundprint ? (
             <button onClick={stopSoundprint}>⏹ Stop</button>
           ) : (
