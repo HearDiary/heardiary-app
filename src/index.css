@@ -1,1 +1,33 @@
+body {
+  margin: 0;
+  font-family: sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  transition: all 0.3s ease;
+}
+
+:root {
+  --bg: #ffffff;
+  --text: #000000;
+}
+
+[data-theme='dark'] {
+  --bg: #121212;
+  --text: #ffffff;
+}
+
+button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  margin: 0.5rem;
+}
+
+input {
+  padding: 0.5rem;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  margin: 0.5rem 0;
+}
 
