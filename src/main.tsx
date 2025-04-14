@@ -50,7 +50,7 @@ const App = () => {
     reader.readAsDataURL(blob);
   });
 
-  const fetchTagsFromAI = async (base64Audio: string): Promise<string> => {
+  const fetchTagsFromAI = async (base64Audio: string): Promise<{ tag: string; emotion: string; score: number }> => {
     try {
       const response = await fetch('https://heardiary-ai-backend.onrender.com/analyze', {
         method: 'POST',
@@ -58,9 +58,13 @@ const App = () => {
         body: JSON.stringify({ audio: base64Audio })
       });
       const result = await response.json();
-      return result.tag || 'unknown';
+      return {
+        tag: result.tag || 'unknown',
+        emotion: result.emotion || 'neutral',
+        score: result.score || 0
+      };
     } catch {
-      return 'unknown';
+      return { tag: 'unknown', emotion: 'neutral', score: 0 };
     }
   };
 
@@ -84,12 +88,11 @@ const App = () => {
         setElapsedTime(0);
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
         const dataUrl = await blobToBase64(audioBlob);
-        const tag = await fetchTagsFromAI(dataUrl);
+        const { tag, emotion, score } = await fetchTagsFromAI(dataUrl);
         const name = recordingName.trim() || `Recording ${getTimestamp()}`;
         const date = getDateString();
-        const aiScore = Math.random();
 
-        setRecordings((prev) => [...prev, { name, dataUrl, time: duration, note: '', date, aiScore, tag }]);
+        setRecordings((prev) => [...prev, { name, dataUrl, time: duration, note: '', date, aiScore: score, emotion, tag }]);
         setRecordingName('');
         setIsRecording(false);
       };
@@ -134,6 +137,16 @@ const App = () => {
     audio.play();
   };
 
+  const updateNote = (index: number, note: string) => {
+    const updated = [...recordings];
+    updated[index].note = note;
+    setRecordings(updated);
+  };
+
+  const deleteRecording = (index: number) => {
+    setRecordings(recordings.filter((_, i) => i !== index));
+  };
+
   const grouped = recordings.reduce((acc, r) => {
     acc[r.date] = acc[r.date] || [];
     acc[r.date].push(r);
@@ -172,9 +185,16 @@ const App = () => {
             <div key={date}>
               <h4>{date}</h4>
               {grouped[date].map((r, i) => (
-                <div key={i}>
-                  <strong>{getTagIcon(r.tag)} {r.name}</strong> ({r.time})<br />
+                <div key={i} style={{ marginBottom: '1rem', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '10px' }}>
+                  <strong>{getTagIcon(r.tag)} {r.name}</strong> ({r.time}) – {r.emotion} – Score: {r.aiScore?.toFixed(2)}<br />
                   <audio controls src={r.dataUrl} />
+                  <textarea
+                    value={r.note || ''}
+                    onChange={(e) => updateNote(recordings.indexOf(r), e.target.value)}
+                    placeholder="Add note..."
+                    style={{ display: 'block', marginTop: '0.5rem', width: '100%' }}
+                  />
+                  <button onClick={() => deleteRecording(recordings.indexOf(r))} style={{ marginTop: '0.5rem' }}>Delete</button>
                 </div>
               ))}
             </div>
