@@ -23,6 +23,7 @@ const App = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [darkMode, setDarkMode] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>('');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -50,7 +51,7 @@ const App = () => {
     reader.readAsDataURL(blob);
   });
 
-  const fetchTagsFromAI = async (base64Audio: string): Promise<{ tag: string; emotion: string; score: number }> => {
+  const fetchTagsFromAI = async (base64Audio: string): Promise<{ tag: string; score: number; emotion: string }> => {
     try {
       const response = await fetch('https://heardiary-ai-backend.onrender.com/analyze', {
         method: 'POST',
@@ -60,11 +61,11 @@ const App = () => {
       const result = await response.json();
       return {
         tag: result.tag || 'unknown',
-        emotion: result.emotion || 'neutral',
-        score: result.score || 0
+        score: result.score || 0,
+        emotion: result.emotion || 'neutral'
       };
     } catch {
-      return { tag: 'unknown', emotion: 'neutral', score: 0 };
+      return { tag: 'unknown', score: 0, emotion: 'neutral' };
     }
   };
 
@@ -88,11 +89,11 @@ const App = () => {
         setElapsedTime(0);
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
         const dataUrl = await blobToBase64(audioBlob);
-        const { tag, emotion, score } = await fetchTagsFromAI(dataUrl);
+        const { tag, score, emotion } = await fetchTagsFromAI(dataUrl);
         const name = recordingName.trim() || `Recording ${getTimestamp()}`;
         const date = getDateString();
 
-        setRecordings((prev) => [...prev, { name, dataUrl, time: duration, note: '', date, aiScore: score, emotion, tag }]);
+        setRecordings((prev) => [...prev, { name, dataUrl, time: duration, note: '', date, aiScore: score, tag, emotion }]);
         setRecordingName('');
         setIsRecording(false);
       };
@@ -117,7 +118,8 @@ const App = () => {
   };
 
   const playSoundprint = () => {
-    const todays = recordings.filter((r) => r.date === getDateString());
+    const day = selectedDate || getDateString();
+    const todays = recordings.filter((r) => r.date === day);
     if (!todays.length) return;
     let current = 0;
     const audio = new Audio(todays[current].dataUrl);
@@ -135,16 +137,6 @@ const App = () => {
       }
     };
     audio.play();
-  };
-
-  const updateNote = (index: number, note: string) => {
-    const updated = [...recordings];
-    updated[index].note = note;
-    setRecordings(updated);
-  };
-
-  const deleteRecording = (index: number) => {
-    setRecordings(recordings.filter((_, i) => i !== index));
   };
 
   const grouped = recordings.reduce((acc, r) => {
@@ -165,55 +157,58 @@ const App = () => {
     }
   };
 
+  const toggleTheme = () => setDarkMode(prev => !prev);
+
   return (
-    <div>
-      <img src={logo} alt="logo" width={40} />
-      <h2>HearDiary</h2>
+    <div style={{ fontFamily: 'sans-serif', backgroundColor: darkMode ? '#121212' : '#f5f5f5', color: darkMode ? '#fff' : '#000', minHeight: '100vh', paddingBottom: 80 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', padding: 16 }}>
+        <img src={logo} alt="logo" width={40} />
+        <button onClick={toggleTheme}>{darkMode ? '☀️' : '🌙'}</button>
+      </div>
+      <h2 style={{ textAlign: 'center' }}>HearDiary</h2>
 
-      {section === 'record' && (
-        <div>
-          <input value={recordingName} onChange={e => setRecordingName(e.target.value)} placeholder="Recording name..." />
-          <button onClick={startRecording} disabled={isRecording}>Start</button>
-          <button onClick={stopRecording} disabled={!isRecording}>Stop</button>
-          {isRecording && <div>⏱ {formatTime(elapsedTime)}</div>}
-        </div>
-      )}
-
-      {section === 'diary' && (
-        <div>
-          {Object.keys(grouped).sort((a, b) => b.localeCompare(a)).map(date => (
-            <div key={date}>
-              <h4>{date}</h4>
-              {grouped[date].map((r, i) => (
-                <div key={i} style={{ marginBottom: '1rem', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '10px' }}>
-                  <strong>{getTagIcon(r.tag)} {r.name}</strong> ({r.time}) – {r.emotion} – Score: {r.aiScore?.toFixed(2)}<br />
-                  <audio controls src={r.dataUrl} />
-                  <textarea
-                    value={r.note || ''}
-                    onChange={(e) => updateNote(recordings.indexOf(r), e.target.value)}
-                    placeholder="Add note..."
-                    style={{ display: 'block', marginTop: '0.5rem', width: '100%' }}
-                  />
-                  <button onClick={() => deleteRecording(recordings.indexOf(r))} style={{ marginTop: '0.5rem' }}>Delete</button>
-                </div>
-              ))}
+      <div style={{ textAlign: 'center' }}>
+        {section === 'record' && (
+          <div>
+            <input value={recordingName} onChange={e => setRecordingName(e.target.value)} placeholder="Recording name..." style={{ padding: 8, width: '80%', borderRadius: 10 }} />
+            <div style={{ margin: '1rem' }}>
+              <button onClick={startRecording} disabled={isRecording} style={{ background: '#43a047', color: '#fff', padding: '0.5rem 1rem', borderRadius: 8, marginRight: 8 }}>Start</button>
+              <button onClick={stopRecording} disabled={!isRecording} style={{ background: '#e53935', color: '#fff', padding: '0.5rem 1rem', borderRadius: 8 }}>Stop</button>
             </div>
-          ))}
-        </div>
-      )}
+            {isRecording && <div>⏱ {formatTime(elapsedTime)}</div>}
+          </div>
+        )}
 
-      {section === 'soundprint' && (
-        <div>
-          <h3>Soundprint</h3>
-          {isPlayingSoundprint ? (
-            <button onClick={stopSoundprint}>⏹ Stop</button>
-          ) : (
-            <button onClick={playSoundprint}>▶️ Play My Day</button>
-          )}
-        </div>
-      )}
+        {section === 'diary' && (
+          <div style={{ padding: 16 }}>
+            {Object.keys(grouped).sort((a, b) => b.localeCompare(a)).map(date => (
+              <div key={date}>
+                <h4>{date}</h4>
+                {grouped[date].map((r, i) => (
+                  <div key={i} style={{ marginBottom: 12, background: darkMode ? '#222' : '#eee', padding: 10, borderRadius: 10 }}>
+                    <strong>{getTagIcon(r.tag)} {r.name}</strong> ({r.time}) – {r.emotion || 'neutral'} – Score: {r.aiScore?.toFixed(2)}<br />
+                    <audio controls src={r.dataUrl} style={{ marginTop: 8 }} />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
 
-      <nav>
+        {section === 'soundprint' && (
+          <div>
+            <h3>Soundprint</h3>
+            <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} style={{ padding: 6, borderRadius: 6, marginBottom: 12 }} />
+            {isPlayingSoundprint ? (
+              <button onClick={stopSoundprint}>⏹ Stop</button>
+            ) : (
+              <button onClick={playSoundprint}>▶️ Play My Day</button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <nav style={{ position: 'fixed', bottom: 0, width: '100%', display: 'flex', justifyContent: 'space-around', padding: 12, background: darkMode ? '#000' : '#fff', borderTop: '1px solid #ccc' }}>
         <button onClick={() => { stopSoundprint(); setSection('record'); }}>🎙</button>
         <button onClick={() => { stopSoundprint(); setSection('diary'); }}>📁</button>
         <button onClick={() => setSection('soundprint')}>🎧</button>
