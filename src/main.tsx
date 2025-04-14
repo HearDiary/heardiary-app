@@ -235,9 +235,9 @@ const App = () => {
         padding: '0.5rem', borderTop: '1px solid #ccc',
         background: darkMode ? '#000' : '#fff'
       }}>
-        <button onClick={() => { stopSoundprint(); setSection('record'); }}>🎙</button>
-        <button onClick={() => { stopSoundprint(); setSection('diary'); }}>📁</button>
-        <button onClick={() => setSection('soundprint')}>🎧</button>
+         <button onClick={() => { stopSoundprint(); setSection('record'); }}>🎙</button>
+  <button onClick={() => { stopSoundprint(); setSection('diary'); }}>📁</button>
+  <button onClick={() => setSection('soundprint')}>🎧</button>
       </nav>
     </div>
   );
