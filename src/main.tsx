@@ -1,5 +1,3 @@
-// Updated and modernized main.tsx for HearDiary
-
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
@@ -17,6 +15,8 @@ interface Recording {
 }
 
 const App = () => {
+  const [pin, setPin] = useState('');
+  const [enteredPin, setEnteredPin] = useState('');
   const [section, setSection] = useState<'record' | 'diary' | 'soundprint'>('record');
   const [recordings, setRecordings] = useState<Recording[]>(() => {
     const stored = localStorage.getItem('hearDiaryBase64Recordings');
@@ -25,10 +25,8 @@ const App = () => {
   const [recordingName, setRecordingName] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
-  const [darkMode, setDarkMode] = useState(false);
-  const [pin, setPin] = useState('');
-  const [authorized, setAuthorized] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
+  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -40,12 +38,12 @@ const App = () => {
     localStorage.setItem('hearDiaryBase64Recordings', JSON.stringify(recordings));
   }, [recordings]);
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
-    return `${mins}:${secs}`;
-  };
+  useEffect(() => {
+    document.body.className = darkMode ? 'dark' : 'light';
+    localStorage.setItem('darkMode', String(darkMode));
+  }, [darkMode]);
 
+  const formatTime = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
   const getTimestamp = () => new Date().toLocaleString();
   const getDateString = () => new Date().toISOString().split('T')[0];
 
@@ -85,17 +83,15 @@ const App = () => {
       mediaRecorder.onstop = async () => {
         if (intervalRef.current) clearInterval(intervalRef.current);
         if (streamRef.current) streamRef.current.getTracks().forEach((track) => track.stop());
-
-        const duration = formatTime(elapsedTime);
         setElapsedTime(0);
+
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
         const dataUrl = await blobToBase64(audioBlob);
         const tag = await fetchTagsFromAI(dataUrl);
         const name = recordingName.trim() || `Recording ${getTimestamp()}`;
         const date = getDateString();
-        const aiScore = Math.random();
-
-        setRecordings((prev) => [...prev, { name, dataUrl, time: duration, note: '', date, aiScore, tag }]);
+        const aiScore = parseFloat((Math.random()).toFixed(2));
+        setRecordings((prev) => [...prev, { name, dataUrl, time: formatTime(elapsedTime), note: '', date, aiScore, tag }]);
         setRecordingName('');
         setIsRecording(false);
       };
@@ -106,7 +102,7 @@ const App = () => {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current?.state !== 'inactive') {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
   };
@@ -120,16 +116,16 @@ const App = () => {
   };
 
   const playSoundprint = () => {
-    const tracks = recordings.filter(r => r.date === selectedDate);
-    if (!tracks.length) return;
+    const dayRecordings = recordings.filter((r) => r.date === selectedDate);
+    if (!dayRecordings.length) return;
     let current = 0;
-    const audio = new Audio(tracks[current].dataUrl);
+    const audio = new Audio(dayRecordings[current].dataUrl);
     playlistRef.current = audio;
     setIsPlayingSoundprint(true);
     audio.onended = () => {
       current++;
-      if (current < tracks.length) {
-        const next = new Audio(tracks[current].dataUrl);
+      if (current < dayRecordings.length) {
+        const next = new Audio(dayRecordings[current].dataUrl);
         playlistRef.current = next;
         next.onended = audio.onended;
         next.play();
@@ -158,46 +154,51 @@ const App = () => {
     }
   };
 
-  if (!authorized) {
+  if (enteredPin !== pin) {
     return (
-      <div className={darkMode ? 'dark' : ''}>
+      <div className="centered">
         <h2>Enter your PIN</h2>
-        <input type="password" value={pin} onChange={e => setPin(e.target.value)} />
-        <button onClick={() => pin === '1234' && setAuthorized(true)}>Submit</button>
+        <input value={enteredPin} onChange={e => setEnteredPin(e.target.value)} />
+        <button onClick={() => setPin(enteredPin)}>Submit</button>
       </div>
     );
   }
 
   return (
-    <div className={darkMode ? 'dark' : ''}>
+    <div className={`app ${darkMode ? 'dark' : 'light'}`}>
       <header>
-        <img src={logo} alt="logo" width={40} />
-        <h2>HearDiary</h2>
-        <label>
-          <input type="checkbox" checked={darkMode} onChange={() => setDarkMode(d => !d)} /> {darkMode ? '🌙' : '☀️'}
+        <img src={logo} alt="logo" className="logo" />
+        <h1>HearDiary</h1>
+        <label className="switch">
+          <input type="checkbox" checked={darkMode} onChange={() => setDarkMode(!darkMode)} />
+          <span className="slider round"></span>
         </label>
       </header>
 
       {section === 'record' && (
-        <div>
+        <div className="card">
           <input value={recordingName} onChange={e => setRecordingName(e.target.value)} placeholder="Recording name..." />
-          <button onClick={startRecording} disabled={isRecording}>Start</button>
-          <button onClick={stopRecording} disabled={!isRecording}>Stop</button>
-          {isRecording && <div>⏱ {formatTime(elapsedTime)}</div>}
+          <div className="buttons">
+            <button onClick={startRecording} disabled={isRecording}>Start</button>
+            <button onClick={stopRecording} disabled={!isRecording}>Stop</button>
+          </div>
+          {isRecording && <div className="timer">⏱ {formatTime(elapsedTime)}</div>}
         </div>
       )}
 
       {section === 'diary' && (
         <div>
           {Object.keys(grouped).sort((a, b) => b.localeCompare(a)).map(date => (
-            <div key={date}>
-              <h4>{date}</h4>
+            <div key={date} className="card">
+              <h3>{date}</h3>
               {grouped[date].map((r, i) => (
-                <div key={i}>
-                  <strong>{getTagIcon(r.tag)} {r.name}</strong> ({r.time}) – {r.emotion || 'unknown'} – Score: {r.aiScore?.toFixed(2)}<br />
-                  <audio controls src={r.dataUrl} />
-                  <a href={r.dataUrl} download={r.name}>⬇️ Download</a>
-                  <button onClick={() => setRecordings(prev => prev.filter(x => x !== r))}>🗑 Delete</button>
+                <div key={i} className="entry">
+                  <strong>{getTagIcon(r.tag)} {r.name}</strong> ({r.time}) – {r.emotion || 'unknown'} – Score: {r.aiScore}
+                  <audio controls src={r.dataUrl}></audio>
+                  <div className="entry-actions">
+                    <a href={r.dataUrl} download={`${r.name}.wav`} className="download-btn">⬇️ Download</a>
+                    <button onClick={() => setRecordings(prev => prev.filter((_, index) => prev.indexOf(r) !== index))}>🗑 Delete</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -206,9 +207,9 @@ const App = () => {
       )}
 
       {section === 'soundprint' && (
-        <div>
+        <div className="card">
           <h3>Soundprint</h3>
-          <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
+          <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
           {isPlayingSoundprint ? (
             <button onClick={stopSoundprint}>⏹ Stop</button>
           ) : (
@@ -217,11 +218,11 @@ const App = () => {
         </div>
       )}
 
-      <nav>
+      <footer>
         <button onClick={() => { stopSoundprint(); setSection('record'); }}>🎙</button>
         <button onClick={() => { stopSoundprint(); setSection('diary'); }}>📁</button>
         <button onClick={() => setSection('soundprint')}>🎧</button>
-      </nav>
+      </footer>
     </div>
   );
 };
