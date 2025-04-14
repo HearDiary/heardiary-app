@@ -159,11 +159,16 @@ const App = () => {
 
   const toggleTheme = () => setDarkMode(prev => !prev);
 
+  const deleteRecording = (index: number) => {
+    setRecordings((prev) => prev.filter((_, i) => i !== index));
+  };
+
   return (
     <div style={{ fontFamily: 'sans-serif', backgroundColor: darkMode ? '#121212' : '#f5f5f5', color: darkMode ? '#fff' : '#000', minHeight: '100vh', paddingBottom: 80 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', padding: 16 }}>
-        <img src={logo} alt="logo" width={40} />
-        <button onClick={toggleTheme}>{darkMode ? '☀️' : '🌙'}</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 16 }}>
+        <div style={{ flex: 1 }}></div>
+        <img src={logo} alt="logo" width={48} style={{ margin: '0 auto' }} />
+        <button onClick={toggleTheme} style={{ flex: 1, textAlign: 'right' }}>{darkMode ? '☀️' : '🌙'}</button>
       </div>
       <h2 style={{ textAlign: 'center' }}>HearDiary</h2>
 
@@ -188,6 +193,10 @@ const App = () => {
                   <div key={i} style={{ marginBottom: 12, background: darkMode ? '#222' : '#eee', padding: 10, borderRadius: 10 }}>
                     <strong>{getTagIcon(r.tag)} {r.name}</strong> ({r.time}) – {r.emotion || 'neutral'} – Score: {r.aiScore?.toFixed(2)}<br />
                     <audio controls src={r.dataUrl} style={{ marginTop: 8 }} />
+                    <div style={{ marginTop: 6 }}>
+                      <a href={r.dataUrl} download={`${r.name}.wav`} style={{ marginRight: 16 }}>⬇️ Download</a>
+                      <button onClick={() => deleteRecording(recordings.indexOf(r))}>🗑️ Delete</button>
+                    </div>
                   </div>
                 ))}
               </div>
