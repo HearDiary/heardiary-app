@@ -1,5 +1,4 @@
-// main.tsx [v1.1] – Fix prehravania + grafické vylepšenia + AI tagy filter
-
+// main.tsx – v1.2 HearDiary (AI backend connected)
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import logo from './assets/logo_icon_256.png';
@@ -25,22 +24,21 @@ const App = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [darkMode, setDarkMode] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [isPlayingSoundprint, setIsPlayingSoundprint] = useState(false);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const playlistRef = useRef<HTMLAudioElement | null>(null);
-  const [isPlayingSoundprint, setIsPlayingSoundprint] = useState(false);
-  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     localStorage.setItem('hearDiaryBase64Recordings', JSON.stringify(recordings));
   }, [recordings]);
 
   useEffect(() => {
-    return () => {
-      if (playlistRef.current) playlistRef.current.pause();
-    };
+    if (section !== 'soundprint') stopSoundprint();
   }, [section]);
 
   const formatTime = (seconds: number) => {
@@ -48,9 +46,6 @@ const App = () => {
     const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
     return `${mins}:${secs}`;
   };
-
-  const getTimestamp = () => new Date().toLocaleString();
-  const getDateString = () => new Date().toISOString().split('T')[0];
 
   const blobToBase64 = (blob: Blob): Promise<string> => new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -64,15 +59,17 @@ const App = () => {
     return emotions[Math.floor(Math.random() * emotions.length)];
   };
 
-  const fetchTagsFromAI = async (blob: Blob): Promise<string> => {
+  const fetchTagsFromAI = async (dataUrl: string): Promise<string> => {
     try {
       const response = await fetch('https://heardiary-ai-backend.onrender.com/analyze', {
         method: 'POST',
-        body: blob
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataUrl })
       });
-      const data = await response.json();
-      return data.tag || 'unknown';
-    } catch {
+      const result = await response.json();
+      return result.label || 'unknown';
+    } catch (error) {
+      console.error('AI backend error:', error);
       return 'unknown';
     }
   };
@@ -91,65 +88,69 @@ const App = () => {
       mediaRecorder.ondataavailable = (e) => e.data.size > 0 && audioChunksRef.current.push(e.data);
       mediaRecorder.onstop = async () => {
         if (intervalRef.current) clearInterval(intervalRef.current);
-        if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop());
+        if (streamRef.current) streamRef.current.getTracks().forEach((track) => track.stop());
 
-        const duration = formatTime(elapsedTime);
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
         const dataUrl = await blobToBase64(audioBlob);
-        const name = recordingName.trim() || `Recording ${getTimestamp()}`;
-        const date = getDateString();
-        const aiScore = Math.random();
-        const emotion = analyzeEmotion();
-        const tag = await fetchTagsFromAI(audioBlob);
+        const tag = await fetchTagsFromAI(dataUrl);
+        const date = new Date().toISOString().split('T')[0];
 
-        setRecordings((prev) => [...prev, { name, dataUrl, time: duration, date, aiScore, emotion, tag }]);
+        setRecordings((prev) => [
+          ...prev,
+          {
+            name: recordingName || `Recording ${new Date().toLocaleString()}`,
+            dataUrl,
+            time: formatTime(elapsedTime),
+            note: '',
+            date,
+            aiScore: Math.random(),
+            emotion: analyzeEmotion(),
+            tag
+          },
+        ]);
+
         setRecordingName('');
         setIsRecording(false);
+        setElapsedTime(0);
       };
 
       mediaRecorder.start();
-    } catch (e) {
-      console.error('Mic error', e);
+    } catch (error) {
+      console.error('Mic error:', error);
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop();
+    if (mediaRecorderRef.current?.state !== 'inactive') mediaRecorderRef.current.stop();
   };
 
   const stopSoundprint = () => {
+    if (playlistRef.current) {
+      playlistRef.current.pause();
+      playlistRef.current = null;
+    }
     setIsPlayingSoundprint(false);
-    if (playlistRef.current) playlistRef.current.pause();
   };
 
   const playSoundprint = () => {
-    const todays = recordings.filter(r => r.date === getDateString());
-    if (!todays.length) return;
+    const filtered = recordings.filter((r) => r.date === selectedDate);
+    if (!filtered.length) return;
     let current = 0;
-    const audio = new Audio(todays[current].dataUrl);
+    const audio = new Audio(filtered[current].dataUrl);
     playlistRef.current = audio;
     setIsPlayingSoundprint(true);
     audio.onended = () => {
       current++;
-      if (current < todays.length) {
-        const next = new Audio(todays[current].dataUrl);
+      if (current < filtered.length) {
+        const next = new Audio(filtered[current].dataUrl);
         playlistRef.current = next;
         next.onended = audio.onended;
         next.play();
       } else {
-        setIsPlayingSoundprint(false);
+        stopSoundprint();
       }
     };
     audio.play();
-  };
-
-  const deleteRecording = (index: number) => setRecordings(prev => prev.filter((_, i) => i !== index));
-  const updateNote = (index: number, note: string) => {
-    setRecordings(prev => {
-      const updated = [...prev];
-      updated[index].note = note;
-      return updated;
-    });
   };
 
   const grouped = recordings.reduce((acc, rec) => {
@@ -160,21 +161,23 @@ const App = () => {
 
   const sortedDates = Object.keys(grouped).sort((a, b) => (a < b ? 1 : -1));
 
+  const toggleTheme = () => setDarkMode((prev) => !prev);
+
   return (
-    <div style={{ fontFamily: 'Arial', textAlign: 'center', background: darkMode ? '#121212' : '#f9f9f9', color: darkMode ? '#eee' : '#111', minHeight: '100vh', paddingBottom: 60 }}>
-      <button onClick={() => setDarkMode(!darkMode)} style={{ position: 'absolute', top: 10, right: 16 }}>{darkMode ? '☀️' : '🌙'}</button>
+    <div style={{ fontFamily: 'Arial', textAlign: 'center', background: darkMode ? '#111' : '#f9f9f9', color: darkMode ? '#eee' : '#111', minHeight: '100vh' }}>
+      <button onClick={toggleTheme} style={{ position: 'absolute', top: 10, right: 16 }}>{darkMode ? '☀️' : '🌙'}</button>
       <img src={logo} alt="Logo" style={{ width: 56, margin: '1rem auto' }} />
 
       {section === 'record' && (
-        <>
+        <div>
           <h2>Record</h2>
-          <input value={recordingName} onChange={e => setRecordingName(e.target.value)} placeholder="Recording name..." style={{ padding: 10, borderRadius: 10, border: '1px solid #ccc' }} />
+          <input placeholder="Recording name..." value={recordingName} onChange={(e) => setRecordingName(e.target.value)} style={{ padding: 10, borderRadius: 10 }} />
           <div style={{ margin: '1rem' }}>
-            <button onClick={startRecording} disabled={isRecording} style={{ backgroundColor: '#43a047', color: 'white', padding: '0.5rem 1rem', borderRadius: 10, marginRight: 8 }}>Start</button>
-            <button onClick={stopRecording} disabled={!isRecording} style={{ backgroundColor: '#e53935', color: 'white', padding: '0.5rem 1rem', borderRadius: 10 }}>Stop</button>
+            <button onClick={startRecording} disabled={isRecording} style={{ backgroundColor: '#4caf50', color: 'white', padding: '0.5rem 1rem', borderRadius: 10 }}>Start</button>
+            <button onClick={stopRecording} disabled={!isRecording} style={{ backgroundColor: '#f44336', color: 'white', padding: '0.5rem 1rem', borderRadius: 10, marginLeft: 8 }}>Stop</button>
           </div>
           {isRecording && <div>⏱ {formatTime(elapsedTime)}</div>}
-        </>
+        </div>
       )}
 
       {section === 'diary' && (
@@ -184,19 +187,19 @@ const App = () => {
             <div key={date} style={{ marginBottom: '1.5rem' }}>
               <h4>{date}</h4>
               {grouped[date].map((rec, i) => (
-                <div key={i} style={{ padding: '1rem', marginBottom: '1rem', borderRadius: 10, background: darkMode ? '#222' : '#eee' }}>
-                  <strong>{rec.name}</strong> ({rec.time}) – <i>{rec.emotion || 'neutral'}</i> – Score: {rec.aiScore?.toFixed(2)} – Tag: {rec.tag || 'unknown'}<br />
+                <div key={i} style={{ padding: '1rem', borderRadius: 10, background: darkMode ? '#222' : '#eee', marginBottom: 10 }}>
+                  <strong>{rec.name}</strong> ({rec.time}) – <i>{rec.emotion}</i> – Tag: {rec.tag || 'unknown'} – Score: {rec.aiScore?.toFixed(2)}<br />
                   <audio controls src={rec.dataUrl} />
                   <textarea
-                    value={rec.note || ''}
-                    onChange={(e) => updateNote(recordings.indexOf(rec), e.target.value)}
                     placeholder="Add note..."
-                    style={{ marginTop: '0.3rem', padding: '0.4rem', borderRadius: 8, width: '90%' }}
+                    value={rec.note || ''}
+                    onChange={(e) => {
+                      const updated = [...recordings];
+                      updated[recordings.indexOf(rec)].note = e.target.value;
+                      setRecordings(updated);
+                    }}
+                    style={{ width: '90%', marginTop: 4, padding: 6, borderRadius: 8 }}
                   />
-                  <div>
-                    <a href={rec.dataUrl} download={rec.name + '.wav'} style={{ color: '#2196f3', marginRight: '1rem' }}>Download</a>
-                    <button onClick={() => deleteRecording(recordings.indexOf(rec))} style={{ color: '#999' }}>Delete</button>
-                  </div>
                 </div>
               ))}
             </div>
@@ -207,9 +210,18 @@ const App = () => {
       {section === 'soundprint' && (
         <div>
           <h2>Soundprint</h2>
-          <button onClick={isPlayingSoundprint ? stopSoundprint : playSoundprint} style={{ backgroundColor: '#5e35b1', color: 'white', padding: '0.5rem 1.2rem', borderRadius: 10 }}>
-            {isPlayingSoundprint ? '⏹️ Stop' : '▶️ Play My Day'}
-          </button>
+          <select value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} style={{ marginBottom: '1rem', padding: 8, borderRadius: 8 }}>
+            {sortedDates.map((date) => (
+              <option key={date} value={date}>{date}</option>
+            ))}
+          </select>
+          <div>
+            {!isPlayingSoundprint ? (
+              <button onClick={playSoundprint} style={{ backgroundColor: '#673ab7', color: 'white', padding: '0.5rem 1rem', borderRadius: 10 }}>▶️ Play My Day</button>
+            ) : (
+              <button onClick={stopSoundprint} style={{ backgroundColor: '#ff5722', color: 'white', padding: '0.5rem 1rem', borderRadius: 10 }}>⏹ Stop</button>
+            )}
+          </div>
         </div>
       )}
 
