@@ -39,19 +39,16 @@ const App = () => {
     localStorage.setItem('hearDiaryBase64Recordings', JSON.stringify(recordings));
   }, [recordings]);
 
-  const formatTime = (s: number) =>
-    `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
-
+  const formatTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
   const getDate = () => new Date().toISOString().split('T')[0];
   const getTimestamp = () => new Date().toLocaleString();
 
-  const blobToBase64 = (blob: Blob): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+  const blobToBase64 = (blob: Blob): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 
   const fetchTag = async (audio: string) => {
     setStatus('🔍 Analyzing...');
@@ -234,6 +231,7 @@ const App = () => {
           {Object.keys(grouped).sort((a, b) => b.localeCompare(a)).map(date => (
             <div key={date}>
               <h4>{date}</h4>
+              <hr />
               {grouped[date].map((r, i) => (
                 <div key={i} className="card">
                   <strong>{getTagIcon(r.tag)} {r.name}</strong> ({r.time})<br />
